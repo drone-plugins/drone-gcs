@@ -79,7 +79,7 @@ func TestRun(t *testing.T) {
 	}
 	updir := filepath.Join(wdir, "upload")
 	subdir := filepath.Join(updir, "sub")
-	mkdirs(t, wdir, "upload", "sub")
+	mkdirs(t, subdir)
 	writeFile(t, updir, "file.txt", []byte("text"))
 	writeFile(t, updir, "file.js", []byte("javascript"))
 	writeFile(t, subdir, "file.css", []byte("sub style"))

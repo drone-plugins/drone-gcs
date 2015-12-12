@@ -56,7 +56,7 @@ var (
 	// workspace is the repo build workspace.
 	workspace plugin.Workspace
 
-	// bucket is the GCS upload target bucket
+	// bucket is the GCS target bucket
 	bucket *storage.BucketHandle
 
 	// logging functions
@@ -137,6 +137,7 @@ func uploadFile(dst, file string) error {
 	if _, err := io.Copy(w, r); err != nil {
 		return err
 	}
+	// TODO implement exponential backoff
 	return w.Close()
 }
 
@@ -184,7 +185,7 @@ func matchGzip(file string) bool {
 //
 // It excludes files matching vargs.Ignore pattern.
 // The ignore pattern is matched using filepath.Match against a partial
-// file name with first len(vargs.Source) runes removed.
+// file name, relative to vargs.Source.
 func walkFiles() ([]string, error) {
 	var items []string
 	err := filepath.Walk(vargs.Source, func(p string, fi os.FileInfo, err error) error {
@@ -251,7 +252,7 @@ func main() {
 	plugin.Param("workspace", &workspace)
 	plugin.Param("vargs", &vargs)
 	plugin.MustParse()
-	sort.Strings(vargs.Gzip)
+	sort.Strings(vargs.Gzip) // need for matchGzip
 
 	auth, err := google.JWTConfigFromJSON([]byte(vargs.AuthKey), storage.ScopeFullControl)
 	if err != nil {
