@@ -37,6 +37,7 @@ import (
 )
 
 // maxConcurrent is the highest upload concurrency.
+// It cannot be 0.
 const maxConcurrent = 100
 
 var (
@@ -74,32 +75,6 @@ func errorf(format string, args ...interface{}) {
 	ecode = 1
 	ecodeMu.Unlock()
 	printf(format, args...)
-}
-
-// result contains upload result of a single file
-type result struct {
-	name string
-	err  error
-}
-
-// uploadAll uploads each file sent to channel c in a separate goroutine.
-// It reports the upload result to channel r.
-// The returned name is a path relative to vargs.Source.
-//
-// The target object path is created from vargs.Target and the file name
-// relative to vargs.Source.
-func uploadAll(c <-chan string, r chan<- *result) {
-	for f := range c {
-		go func(f string) {
-			rel, err := filepath.Rel(vargs.Source, f)
-			if err != nil {
-				r <- &result{f, err}
-				return
-			}
-			err = uploadFile(path.Join(vargs.Target, rel), f)
-			r <- &result{rel, err}
-		}(f)
-	}
 }
 
 // uploadFile uploads the file to dst using global bucket.
@@ -229,12 +204,27 @@ func run(client *storage.Client) {
 		fatalf("local files: %v", err)
 	}
 
+	// result contains upload result of a single file
+	type result struct {
+		name string
+		err  error
+	}
+
 	// upload all files in a goroutine, maxConcurrent at a time
-	up := make(chan string, maxConcurrent)
+	buf := make(chan struct{}, maxConcurrent)
 	res := make(chan *result, len(src))
-	go uploadAll(up, res)
 	for _, f := range src {
-		up <- f
+		buf <- struct{}{} // alloc one slot
+		go func(f string) {
+			rel, err := filepath.Rel(vargs.Source, f)
+			if err != nil {
+				res <- &result{f, err}
+				return
+			}
+			err = uploadFile(path.Join(vargs.Target, rel), f)
+			res <- &result{rel, err}
+			<-buf // free up
+		}(f)
 	}
 
 	// wait for all files to be uploaded or stop at first error
