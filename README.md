@@ -2,7 +2,7 @@
 
 [![Build Status](http://beta.drone.io/api/badges/drone-plugins/drone-google-cloudstorage/status.svg)](http://beta.drone.io/drone-plugins/drone-google-cloudstorage)
 [![Coverage Status](https://aircover.co/badges/drone-plugins/drone-google-cloudstorage/coverage.svg)](https://aircover.co/drone-plugins/drone-google-cloudstorage)
-[![](https://badge.imagelayers.io/plugins/drone-google-cloudstorage:latest.svg)](https://imagelayers.io/?images=plugins/drone-google-cloudstorage:latest 'Get your own badge on imagelayers.io')
+[![](https://badge.imagelayers.io/plugins/drone-gcs:latest.svg)](https://imagelayers.io/?images=plugins/drone-gcs:latest 'Get your own badge on imagelayers.io')
 
 Drone plugin to publish files and artifacts to Google Cloud Storage
 
