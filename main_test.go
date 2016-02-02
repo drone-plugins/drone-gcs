@@ -102,7 +102,7 @@ func TestRun(t *testing.T) {
 	vargs.Gzip = []string{"js"}
 	vargs.CacheControl = "public,max-age=10"
 	vargs.Metadata = map[string]string{"x-foo": "bar"}
-	acls := []storage.ACLRule{storage.ACLRule{"allUsers", "READER"}}
+	acls := []storage.ACLRule{storage.ACLRule{Entity: "allUsers", Role: "READER"}}
 	vargs.ACL = []string{fmt.Sprintf("%s:%s", acls[0].Entity, acls[0].Role)}
 
 	var seenMu sync.Mutex // guards seen
@@ -143,7 +143,7 @@ func TestRun(t *testing.T) {
 		seenMu.Unlock()
 		obj := files[attrs.Name]
 		if obj == nil {
-			t.Error("unexpected obj: %+v", attrs)
+			t.Errorf("unexpected obj: %+v", attrs)
 			return
 		}
 
@@ -157,7 +157,7 @@ func TestRun(t *testing.T) {
 			t.Errorf("attrs.ContentEncoding = %q; want gzip", attrs.ContentEncoding)
 		}
 		if !strings.HasPrefix(attrs.ContentType, obj.ctype) {
-			t.Errorf("attrs.ContentType = %q; want text/plain", attrs.ContentType, obj.ctype)
+			t.Errorf("attrs.ContentType = %q; want %q", attrs.ContentType, obj.ctype)
 		}
 		if !reflect.DeepEqual(attrs.ACL, acls) {
 			t.Errorf("attrs.ACL = %v; want %v", attrs.ACL, acls)

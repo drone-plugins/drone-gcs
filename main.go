@@ -41,6 +41,8 @@ import (
 const maxConcurrent = 100
 
 var (
+	buildDate string
+
 	// vargs are provided on stdin of the program
 	// and parsed by plugin package.
 	vargs struct {
@@ -238,6 +240,8 @@ func run(client *storage.Client) {
 }
 
 func main() {
+	fmt.Printf("Drone Google Cloud Storage Plugin built at %s\n", buildDate)
+
 	log.SetFlags(0)
 	plugin.Param("workspace", &workspace)
 	plugin.Param("vargs", &vargs)
