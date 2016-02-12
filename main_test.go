@@ -29,6 +29,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/cloud"
@@ -69,6 +70,73 @@ func writeFile(t *testing.T, dir, name string, b []byte) {
 	p := filepath.Join(dir, name)
 	if err := ioutil.WriteFile(p, b, 0644); err != nil {
 		t.Fatalf("WriteFile(%q): %v", p, err)
+	}
+}
+
+func TestRetryUpload(t *testing.T) {
+	wdir, err := ioutil.TempDir("", "drone-gcs-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, wdir, "file", []byte("test"))
+	vargs.Source = wdir
+	sleep = func(time.Duration) {}
+	backoff := []int{0, 2, 4, 8, 16, 32, 64} // seconds
+
+	tests := []struct {
+		nret, nerr int
+		ok         bool
+	}{
+		{0, 0, true},
+		{3, 0, true},
+		{1, 2, false},
+	}
+	for i, test := range tests {
+		var n int
+
+		sleep = func(d time.Duration) {
+			a := time.Duration(backoff[n]) * time.Second
+			b := time.Duration(backoff[n]+1) * time.Second
+			if d < a || d > b {
+				t.Errorf("%d/%d: d = %v; want between %v and %v", i, n, d, a, b)
+			}
+		}
+
+		rt := &fakeTransport{func(r *http.Request) (*http.Response, error) {
+			_, mp, _ := mime.ParseMediaType(r.Header.Get("content-type"))
+			mr := multipart.NewReader(r.Body, mp["boundary"])
+			mr.NextPart() // skip metadata
+			p, _ := mr.NextPart()
+			b, _ := ioutil.ReadAll(p)
+			// verify the body is always sent with correct content
+			if v := string(b); v != "test" {
+				t.Errorf("%d/%d: b = %q; want 'test'", i, n, b)
+			}
+
+			res := &http.Response{
+				Body:       ioutil.NopCloser(strings.NewReader(`{"name": "fake"}`)),
+				Proto:      "HTTP/1.0",
+				ProtoMajor: 1,
+				ProtoMinor: 0,
+				StatusCode: http.StatusServiceUnavailable,
+			}
+			if n >= test.nerr {
+				res.StatusCode = http.StatusOK
+			}
+			n++
+			return res, nil
+		}}
+		hc := &http.Client{Transport: rt}
+		client, _ := storage.NewClient(context.Background(), cloud.WithBaseHTTP(hc))
+		bucket = client.Bucket("bucket")
+
+		err := retryUpload("file", filepath.Join(wdir, "file"), test.nret)
+		switch {
+		case test.ok && err != nil:
+			t.Errorf("%d: %v", i, err)
+		case !test.ok && err == nil:
+			t.Errorf("%d: want error", i)
+		}
 	}
 }
 
