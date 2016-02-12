@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
+	"math/rand"
 	"mime"
 	"os"
 	"path"
@@ -26,6 +28,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/drone/drone-plugin-go/plugin"
 
@@ -69,6 +72,9 @@ var (
 	// program exit code
 	ecodeMu sync.Mutex // guards ecode
 	ecode   int
+
+	// sleep is overwritten during tests
+	sleep = time.Sleep
 )
 
 // errorf sets exit code to a non-zero value and outputs using printf.
@@ -79,7 +85,25 @@ func errorf(format string, args ...interface{}) {
 	printf(format, args...)
 }
 
+// retryUpload calls uploadFile until the latter returns nil
+// or the number of invocations reaches n.
+// It blocks for a duration of seconds exponential to the iteration between the calls.
+func retryUpload(dst, file string, n int) error {
+	var err error
+	for i := 0; i <= n; i++ {
+		if i > 0 {
+			t := time.Duration((math.Pow(2, float64(i)) + rand.Float64()) * float64(time.Second))
+			sleep(t)
+		}
+		if err = uploadFile(dst, file); err == nil {
+			break
+		}
+	}
+	return err
+}
+
 // uploadFile uploads the file to dst using global bucket.
+// To get a more robust upload use retryUpload instead.
 func uploadFile(dst, file string) error {
 	r, gz, err := gzipper(file)
 	if err != nil {
@@ -114,7 +138,6 @@ func uploadFile(dst, file string) error {
 	if _, err := io.Copy(w, r); err != nil {
 		return err
 	}
-	// TODO implement exponential backoff
 	return w.Close()
 }
 
@@ -223,7 +246,7 @@ func run(client *storage.Client) {
 				res <- &result{f, err}
 				return
 			}
-			err = uploadFile(path.Join(vargs.Target, rel), f)
+			err = retryUpload(path.Join(vargs.Target, rel), f, 5)
 			res <- &result{rel, err}
 			<-buf // free up
 		}(f)
@@ -247,6 +270,7 @@ func main() {
 	plugin.Param("vargs", &vargs)
 	plugin.MustParse()
 	sort.Strings(vargs.Gzip) // need for matchGzip
+	rand.Seed(time.Now().UnixNano())
 
 	auth, err := google.JWTConfigFromJSON([]byte(vargs.AuthKey), storage.ScopeFullControl)
 	if err != nil {
