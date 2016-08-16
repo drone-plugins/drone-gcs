@@ -13,7 +13,7 @@ The following parameters are used to configure this plugin:
 * `acl` - a list of access rules applied to the uploaded files, in a form of `entity:role`
 * `gzip` - files with the specified extensions will be gzipped and uploaded with "gzip" Content-Encoding header
 * `cache_control` - Cache-Control header
-* `metadata` - an arbitrary dictionary with custom metadata applied to all objects
+* `metadata` - an arbitrary dictionary of metadata applied to all objects
 
 The following is a sample configuration in your .drone.yml file:
 
@@ -24,7 +24,7 @@ publish:
       $SERVICE_ACCOUNT_KEY
     source: dist
     target: bucket/dir/
-    ignore: bin/*
+    ignore: *.tmp
     acl:
       - allUsers:READER
     gzip:
@@ -33,20 +33,21 @@ publish:
       - html
     cache_control: public,max-age=3600
     metadata:
-      x-goog-meta-foo: bar
+      x-goog-meta-foo:bar
 ```
 
-`SERVICE_ACCOUNT_KEY` would be defined in .drone.sec (before encryption):
+`SERVICE_ACCOUNT_KEY` would be defined repo or org secrets:
 
-```yaml
-checksum: ...
-environment:
-  SERVICE_ACCOUNT_KEY: >
-    {
-    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-    "client_email": "test@gserviceaccount.com",
-    "client_id": "12487645876234765",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://accounts.google.com/o/oauth2/token",
-    }
+```sh
+drone secret add --image=gcs \
+    octocat/hello-world SERVICE_ACCOUNT_KEY <YOUR_ACCESS_KEY_ID>
 ```
+
+Then sign the YAML file after all secrets are added.
+
+```bash
+drone sign octocat/hello-world
+```
+
+See [secrets](http://readme.drone.io/0.5/usage/secrets/) for additional
+information on secrets
