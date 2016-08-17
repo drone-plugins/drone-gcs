@@ -51,6 +51,6 @@ docker run --rm -i \
   -e PLUGIN_METADATA='{"x-goog-meta-foo":"bar"}' \
   -v $(pwd):$(pwd) \
   -w $(pwd) \
-  plugins/drone-google-cloudstorage
+  plugins/gcs
 
 ```
