@@ -1,31 +1,41 @@
+workspace:
+  base: /go
+
 pipeline:
+
   build:
     image: golang:1.7
     environment:
       - CGO_ENABLED=0
     commands:
-      - make deps
       - make vet
       - make build
       - make test
 
-  publish:
-    coverage:
-      when:
-        branch: master
-    docker:
-      storage_driver: overlay
-      repo: plugins/gcs
-      tag: [ "latest", "1.0", "1" ]
-      when:
-        branch: master
-        event: push
-    docker:
-      storage_driver: overlay
-      repo: plugins/gcs
-      tag: develop
-      when:
-        branch: develop
+  publish_docker_latest:
+    image: plugins/docker
+    pull: true
+    volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+    storage_driver: overlay
+    debug: true
+    daemon_off: true
+    repo: mmorrison/gcs
+    tag: [ "latest", "1.0", "1" ]
+    when:
+      branch: master
+      event: push
+      status: success
+
+  publish_docker_develop:
+    image: plugins/docker
+    pull: true
+    storage_driver: overlay
+    repo: plugins/gcs
+    tag: develop
+    when:
+      branch: develop
+      status: success
 
 plugin:
   name: Google Cloud Storage

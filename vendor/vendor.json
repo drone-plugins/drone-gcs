@@ -27,6 +27,12 @@
 			"revisionTime": "2015-09-07T01:02:28Z"
 		},
 		{
+			"checksumSHA1": "jm802xmRmtkUSVCED5SiDwIe0Jo=",
+			"path": "github.com/urfave/cli",
+			"revision": "168c95418e66e019fe17b8f4f5c45aa62ff80e23",
+			"revisionTime": "2016-08-01T03:09:57Z"
+		},
+		{
 			"checksumSHA1": "pancewZW3HwGvpDwfH5Imrbadc4=",
 			"path": "golang.org/x/net/context",
 			"revision": "e45385e9b226f570b1f086bf287b25d3d4117776",
