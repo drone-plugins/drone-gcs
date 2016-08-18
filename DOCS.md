@@ -36,17 +36,18 @@ publish:
       x-goog-meta-foo: bar
 ```
 
-`SERVICE_ACCOUNT_KEY` would be defined in .drone.sec (before encryption):
+`SERVICE_ACCOUNT_KEY` would be defined in repo or org secrets:
 
-```yaml
-checksum: ...
-environment:
-  SERVICE_ACCOUNT_KEY: >
-    {
-    "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-    "client_email": "test@gserviceaccount.com",
-    "client_id": "12487645876234765",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://accounts.google.com/o/oauth2/token",
-    }
+```sh
+drone secret add --image=gcs \
+    octocat/hello-world SERVICE_ACCOUNT_KEY <YOUR_GOOGLE_CREDENTIALS_JSON>
 ```
+
+Then sign the YAML file after all secrets are added.
+
+```bash
+drone sign octocat/hello-world
+```
+
+See [secrets](http://readme.drone.io/0.5/usage/secrets/) for additional
+information on secrets

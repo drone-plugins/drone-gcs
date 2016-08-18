@@ -14,56 +14,20 @@ Build the binary using `make`:
 make deps build
 ```
 
-### Example
+### Usage
 
 ```sh
-./drone-google-cloudstorage <<EOF
-{
-    "repo": {
-        "clone_url": "git://github.com/drone/drone",
-        "owner": "drone",
-        "name": "drone",
-        "full_name": "drone/drone"
-    },
-    "system": {
-        "link_url": "https://beta.drone.io"
-    },
-    "build": {
-        "number": 22,
-        "status": "success",
-        "started_at": 1421029603,
-        "finished_at": 1421029813,
-        "message": "Update the Readme",
-        "author": "johnsmith",
-        "author_email": "john.smith@gmail.com"
-        "event": "push",
-        "branch": "master",
-        "commit": "436b7a6e2abaddfd35740527353e78a227ddcb2c",
-        "ref": "refs/heads/master"
-    },
-    "workspace": {
-        "root": "/drone/src",
-        "path": "/drone/src/github.com/drone/drone"
-    },
-    "vargs": {
-        "source": "dist",
-        "target": "bucket/dir/",
-        "ignore": "bin/*",
-        "acl": [
-            "allUsers:READER"
-        ],
-        "gzip": [
-            "js",
-            "css",
-            "html"
-        ],
-        "cache_control": "public,max-age=3600",
-        "metadata": {
-            "x-goog-meta-foo": "bar"
-        }
-    }
-}
-EOF
+drone-google-cloudstorage               \
+  --auth-key <auth_key>                 \
+  --source "bin/"                       \
+  --target "bucket/path/"               \
+  --ignore "*.tmp"                      \
+  --acl    "allUsers:READER"            \
+  --acl    "user@domain.com:OWNER"      \
+  --gzip   "js"                         \
+  --gzip   "css"                       \
+  --cache-control "public,max-age=3600" \
+  --metadata '{"x-goog-meta-foo":"bar"}'
 ```
 
 ## Docker
@@ -74,54 +38,19 @@ Build the container using `make`:
 make deps docker
 ```
 
-### Example
+### Usage
 
 ```sh
-docker run -i plugins/drone-google-cloudstorage <<EOF
-{
-    "repo": {
-        "clone_url": "git://github.com/drone/drone",
-        "owner": "drone",
-        "name": "drone",
-        "full_name": "drone/drone"
-    },
-    "system": {
-        "link_url": "https://beta.drone.io"
-    },
-    "build": {
-        "number": 22,
-        "status": "success",
-        "started_at": 1421029603,
-        "finished_at": 1421029813,
-        "message": "Update the Readme",
-        "author": "johnsmith",
-        "author_email": "john.smith@gmail.com"
-        "event": "push",
-        "branch": "master",
-        "commit": "436b7a6e2abaddfd35740527353e78a227ddcb2c",
-        "ref": "refs/heads/master"
-    },
-    "workspace": {
-        "root": "/drone/src",
-        "path": "/drone/src/github.com/drone/drone"
-    },
-    "vargs": {
-        "source": "dist",
-        "target": "bucket/dir/",
-        "ignore": "bin/*",
-        "acl": [
-            "allUsers:READER"
-        ],
-        "gzip": [
-            "js",
-            "css",
-            "html"
-        ],
-        "cache_control": "public,max-age=3600",
-        "metadata": {
-            "x-goog-meta-foo": "bar"
-        }
-    }
-}
-EOF
+docker run --rm -i \
+  -e PLUGIN_SOURCE="dist" \
+  -e PLUGIN_TARGET="bucket/dir/" \
+  -e PLUGIN_IGNORE="bin/*" \
+  -e PLUGIN_ACL="allUsers:READER,user@domain.com:OWNER" \
+  -e PLUGIN_GZIP= "js,css,html" \
+  -e PLUGIN_CACHE_CONTROL="public,max-age=3600" \
+  -e PLUGIN_METADATA='{"x-goog-meta-foo":"bar"}' \
+  -v $(pwd):$(pwd) \
+  -w $(pwd) \
+  plugins/gcs
+
 ```

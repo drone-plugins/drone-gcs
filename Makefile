@@ -1,7 +1,7 @@
 .PHONY: all clean deps fmt vet test docker
 
 EXECUTABLE ?= drone-google-cloudstorage
-IMAGE ?= plugins/$(EXECUTABLE)
+IMAGE ?= plugins/gcs
 COMMIT ?= $(shell git rev-parse --short HEAD)
 
 LDFLAGS = -X "main.buildCommit=$(COMMIT)"
@@ -13,7 +13,7 @@ clean:
 	go clean -i ./...
 
 deps:
-	go get -t ./...
+	go get -v ./...
 
 fmt:
 	go fmt $(PACKAGES)
