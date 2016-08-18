@@ -12,22 +12,18 @@ pipeline:
       - make build
       - make test
 
-  publish_docker_latest:
+  publish:
     image: plugins/docker
     pull: true
-    volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
     storage_driver: overlay
-    debug: true
-    daemon_off: true
-    repo: mmorrison/gcs
+    repo: plugins/gcs
     tag: [ "latest", "1.0", "1" ]
     when:
       branch: master
       event: push
       status: success
 
-  publish_docker_develop:
+  publish:
     image: plugins/docker
     pull: true
     storage_driver: overlay
