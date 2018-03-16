@@ -32,8 +32,8 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
-	"google.golang.org/cloud"
-	"google.golang.org/cloud/storage"
+	"google.golang.org/api/option"
+	"cloud.google.com/go/storage"
 )
 
 type fakeTransport struct {
@@ -127,7 +127,7 @@ func TestRetryUpload(t *testing.T) {
 			return res, nil
 		}}
 		hc := &http.Client{Transport: rt}
-		client, _ := storage.NewClient(context.Background(), cloud.WithBaseHTTP(hc))
+		client, _ := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
 		bucket = client.Bucket("bucket")
 
 		err := retryUpload("file", filepath.Join(wdir, "file"), test.nret)
@@ -251,7 +251,7 @@ func TestRun(t *testing.T) {
 	}}
 
 	hc := &http.Client{Transport: rt}
-	client, err := storage.NewClient(context.Background(), cloud.WithBaseHTTP(hc))
+	client, err := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
 	if err != nil {
 		t.Fatal(err)
 	}

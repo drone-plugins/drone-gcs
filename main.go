@@ -35,8 +35,8 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 
-	"google.golang.org/cloud"
-	"google.golang.org/cloud/storage"
+	"google.golang.org/api/option"
+	"cloud.google.com/go/storage"
 )
 
 // maxConcurrent is the highest upload concurrency.
@@ -277,7 +277,7 @@ func main() {
 		fatalf("auth: %v", err)
 	}
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx, cloud.WithTokenSource(auth.TokenSource(ctx)))
+	client, err := storage.NewClient(ctx, option.WithTokenSource(auth.TokenSource(ctx)))
 	if err != nil {
 		fatalf("storage client: %v", err)
 	}
