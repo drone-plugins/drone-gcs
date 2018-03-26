@@ -163,7 +163,7 @@ pipeline:
 
   docker:
     image: plugins/docker
-    secrets: [docker_username, docker_password]
+    secrets: [ docker_username, docker_password ]
     repo: msuterski/drone-gcs
     tag: latest
     when:
@@ -171,7 +171,7 @@ pipeline:
 
   docker:
     image: plugins/docker
-    secrets: [docker_username, docker_password]
+    secrets: [ docker_username, docker_password ]
     repo: msuterski/drone-gcs
     tag: develop
     when:
