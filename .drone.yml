@@ -163,6 +163,7 @@ pipeline:
 
   docker:
     image: plugins/docker
+    pull: true
     secrets: [ docker_username, docker_password ]
     repo: msuterski/drone-gcs
     tag: latest
@@ -171,6 +172,7 @@ pipeline:
 
   docker:
     image: plugins/docker
+    pull: true
     secrets: [ docker_username, docker_password ]
     repo: msuterski/drone-gcs
     tag: develop
