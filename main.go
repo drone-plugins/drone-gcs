@@ -124,7 +124,7 @@ func run(c *cli.Context) error {
 		var metadata map[string]string
 		err := json.Unmarshal([]byte(c.String("metadata")), &metadata)
 		if err != nil {
-			log.Fatalf("metadata parsing error: %v", err)
+			log.Fatalf("Error parsing metadata field: %v", err)
 		}
 		plugin.Metadata = metadata
 	}

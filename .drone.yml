@@ -1,6 +1,5 @@
 workspace:
   base: /go
-<<<<<<< HEAD
   path: src/github.com/drone-plugins/drone-google-cloudstorage
 
 pipeline:
@@ -147,35 +146,3 @@ pipeline:
     secrets: [ webhook_url ]
     when:
       status: [ success ]
-=======
-  path: src/github.com/msuterski/drone-google-cloudstorage
-
-pipeline:
-  build:
-    image: golang:1.9
-    environment:
-      - CGO_ENABLED=0
-    commands:
-      - make deps
-      - make vet
-      - make test
-      - make build
-
-  docker:
-    image: plugins/docker
-    pull: true
-    secrets: [ docker_username, docker_password ]
-    repo: msuterski/drone-gcs
-    tag: latest
-    when:
-      branch: master
-
-  docker:
-    image: plugins/docker
-    pull: true
-    secrets: [ docker_username, docker_password ]
-    repo: msuterski/drone-gcs
-    tag: develop
-    when:
-      event: push
->>>>>>> Enable builds
