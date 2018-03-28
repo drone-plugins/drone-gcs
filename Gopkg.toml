@@ -1,0 +1,23 @@
+[[constraint]]
+  name = "cloud.google.com/go"
+  version = "0.19.0"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/drone/drone-plugin-go"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/net"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/oauth2"
+
+[[constraint]]
+  branch = "master"
+  name = "google.golang.org/api"
+
+[prune]
+  go-tests = true
+  unused-packages = true
