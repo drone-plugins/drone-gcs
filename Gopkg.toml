@@ -4,10 +4,6 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/drone/drone-plugin-go"
-
-[[constraint]]
-  branch = "master"
   name = "golang.org/x/net"
 
 [[constraint]]

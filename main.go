@@ -25,23 +25,22 @@ import (
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 
-	_ "github.com/joho/godotenv/autoload"
 	"github.com/urfave/cli"
 )
 
 var (
-	buildCommit string
-	plugin      Plugin
+	build  = "0"
+	plugin Plugin
 )
 
 func main() {
-	fmt.Printf("Drone Google Cloud Storage Plugin built from %s\n", buildCommit)
+	fmt.Printf("Drone Google Cloud Storage Plugin build ID: %s\n", build)
 
 	app := cli.NewApp()
 	app.Name = "gcs artifact plugin"
 	app.Usage = "gcs artifact plugin"
 	app.Action = run
-	app.Version = buildCommit
+	app.Version = fmt.Sprintf("1.0.0+%s", build)
 	app.Flags = []cli.Flag{
 
 		cli.StringFlag{
