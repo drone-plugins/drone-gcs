@@ -8,5 +8,5 @@ LABEL maintainer="Drone.IO Community <drone-dev@googlegroups.com>" `
 
 SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
-ADD release\drone-google-cloudstorage.exe c:\drone-google-cloudstorage.exe
-ENTRYPOINT [ "c:\\drone-google-cloudstorage.exe" ]
+ADD release\drone-gcs.exe c:\drone-gcs.exe
+ENTRYPOINT [ "c:\\drone-gcs.exe" ]
