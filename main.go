@@ -46,7 +46,7 @@ func main() {
 		cli.StringFlag{
 			Name:   "auth-key",
 			Usage:  "google auth key",
-			EnvVar: "PLUGIN_AUTH_KEY, GOOGLE_CREDENTIALS",
+			EnvVar: "AUTH_KEY, GOOGLE_CREDENTIALS",
 		},
 		cli.StringSliceFlag{
 			Name:   "acl",
