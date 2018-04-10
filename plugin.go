@@ -188,7 +188,7 @@ func (p *Plugin) uploadFile(dst, file string) error {
 // gzipper returns a stream of file and a boolean indicating
 // whether the stream is gzip-compressed.
 //
-// The stream is compressed if vargs.Gzip contains file extension.
+// The stream is compressed if p.Gzip contains file extension.
 func (p *Plugin) gzipper(file string) (io.ReadCloser, bool, error) {
 	r, err := os.Open(file)
 	if err != nil || !p.matchGzip(file) {
@@ -225,11 +225,11 @@ func (p *Plugin) matchGzip(file string) bool {
 }
 
 // walkFiles creates a complete set of files to upload
-// by walking vargs.Source recursively.
+// by walking p.Source recursively.
 //
-// It excludes files matching vargs.Ignore pattern.
+// It excludes files matching p.Ignore pattern.
 // The ignore pattern is matched using filepath.Match against a partial
-// file name, relative to vargs.Source.
+// file name, relative to p.Source.
 func (p *Plugin) walkFiles() ([]string, error) {
 	var items []string
 	err := filepath.Walk(p.Source, func(path string, fi os.FileInfo, err error) error {

@@ -6,14 +6,14 @@ You will need to a [Service Account](https://developers.google.com/console/help/
 
 The following parameters are used to configure this plugin:
 
+* `auth_key` or `google_credentials` - (Required) GCP service account auth key. Use one of the two
 * `source` - (Required) location of files to upload
 * `target` - (Required) destination to copy files to, including bucket name
 * `ignore` - (Optional) skip files matching this [pattern](https://golang.org/pkg/path/filepath/#Match), relative to `source`
-* `acl` - (Optional) a list of access rules applied to the uploaded files, in a form of `entity:role`
+* `acl` - (Optional) list of access rules applied to the uploaded files, in a form of `entity:role`
 * `gzip` - (Optional) files with the specified extensions will be gzipped and uploaded with "gzip" Content-Encoding header
-* `cache_control` - (Optional) Cache-Control header
-* `metadata` - (Optional) an arbitrary dictionary with custom metadata applied to all objects
-* `google_credentials` - (Required) is the GCP service account auth key
+* `cache_control` - (Optional) Cache-Control header value
+* `metadata` - (Optional) arbitrary dictionary with custom metadata applied to all objects
 
 The following is a sample configuration in your .drone.yml file:
 
