@@ -10,7 +10,7 @@ Drone plugin to publish files and artifacts to Google Cloud Storage. For the usa
 
 Build the binary using `make`:
 
-```
+```sh
 make deps build
 ```
 
@@ -34,11 +34,11 @@ make deps build
 
 Build the container using `make`:
 
-```
+```sh
 make deps docker
 ```
 
-### Usage
+### Container usage
 
 ```sh
 docker run --rm -i \

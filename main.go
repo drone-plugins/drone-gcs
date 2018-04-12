@@ -44,9 +44,9 @@ func main() {
 	app.Flags = []cli.Flag{
 
 		cli.StringFlag{
-			Name:   "auth-key",
+			Name:   "token",
 			Usage:  "google auth key",
-			EnvVar: "GOOGLE_CREDENTIALS",
+			EnvVar: "GOOGLE_CREDENTIALS,TOKEN",
 		},
 		cli.StringSliceFlag{
 			Name:   "acl",
@@ -92,11 +92,11 @@ func main() {
 
 func run(c *cli.Context) error {
 
-	var authKey, source, target string
+	var token, source, target string
 
 	// Check for required fields
-	if authKey = c.String("auth-key"); authKey == "" {
-		return fmt.Errorf("Missing auth key")
+	if token = c.String("token"); token == "" {
+		return fmt.Errorf("Missing google credentials")
 	}
 
 	if source = c.String("source"); source == "" {
@@ -108,7 +108,6 @@ func run(c *cli.Context) error {
 	}
 
 	plugin = Plugin{
-		AuthKey:      authKey,
 		ACL:          c.StringSlice("acl"),
 		Source:       source,
 		Target:       target,
@@ -129,7 +128,7 @@ func run(c *cli.Context) error {
 	}
 
 	// Prepare Google Storage client
-	auth, err := google.JWTConfigFromJSON([]byte(plugin.AuthKey), storage.ScopeFullControl)
+	auth, err := google.JWTConfigFromJSON([]byte(token), storage.ScopeFullControl)
 	if err != nil {
 		log.Fatalf("auth: %v", err)
 	}

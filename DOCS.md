@@ -6,7 +6,7 @@ You will need to a [Service Account](https://developers.google.com/console/help/
 
 The following parameters are used to configure this plugin:
 
-* `google_credentials` - (Required. Secret) GCP service account JSON auth key.
+* `google_credentials` or `token` - (Required. Secret) GCP service account JSON auth key.
 * `source` - (Required) location of files to upload
 * `target` - (Required) destination to copy files to, including bucket name
 * `ignore` - (Optional) skip files matching this [pattern](https://golang.org/pkg/path/filepath/#Match), relative to `source`

@@ -22,8 +22,6 @@ import (
 
 // Plugin defines the GCS plugin parameters.
 type Plugin struct {
-	AuthKey string
-
 	// Indicates the files ACL's to apply
 	ACL []string
 
