@@ -1,7 +1,7 @@
-# drone-google-cloudstorage
+# drone-gcs
 
-[![Build Status](http://beta.drone.io/api/badges/drone-plugins/drone-google-cloudstorage/status.svg)](http://beta.drone.io/drone-plugins/drone-google-cloudstorage)
-[![Coverage Status](https://aircover.co/badges/drone-plugins/drone-google-cloudstorage/coverage.svg)](https://aircover.co/drone-plugins/drone-google-cloudstorage)
+[![Build Status](http://beta.drone.io/api/badges/drone-plugins/drone-gcs/status.svg)](http://beta.drone.io/drone-plugins/drone-gcs)
+[![Coverage Status](https://aircover.co/badges/drone-plugins/drone-gcs/coverage.svg)](https://aircover.co/drone-plugins/drone-gcs)
 [![](https://badge.imagelayers.io/plugins/drone-gcs:latest.svg)](https://imagelayers.io/?images=plugins/drone-gcs:latest 'Get your own badge on imagelayers.io')
 
 Drone plugin to publish files and artifacts to Google Cloud Storage. For the usage information and a listing of the available options please take a look at [the docs](DOCS.md).
@@ -17,7 +17,7 @@ make deps build
 ### Usage
 
 ```sh
-./drone-google-cloudstorage             \
+./drone-gcs                             \
   --auth-key <auth_key>                 \
   --source "bin/"                       \
   --target "bucket/path/"               \

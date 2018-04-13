@@ -2,7 +2,7 @@ version: '{build}'
 image: 'Visual Studio 2017'
 platform: 'x64'
 
-clone_folder: 'c:\gopath\src\github.com\drone-plugins\drone-google-cloudstorage'
+clone_folder: 'c:\gopath\src\github.com\drone-plugins\drone-gcs'
 max_jobs: 1
 
 environment:
@@ -25,18 +25,18 @@ build_script:
       dep ensure
 
       if ( $env:APPVEYOR_REPO_TAG -eq 'false' ) {
-        go build -ldflags "-X main.build=$env:APPVEYOR_BUILD_VERSION" -a -o release/drone-google-cloudstorage.exe
+        go build -ldflags "-X main.build=$env:APPVEYOR_BUILD_VERSION" -a -o release/drone-gcs.exe
       } else {
         $version = $env:APPVEYOR_REPO_TAG_NAME.substring(1)
-        go build -ldflags "-X main.version=$version -X main.build=$env:APPVEYOR_BUILD_VERSION" -a -o release/drone-google-cloudstorage.exe
+        go build -ldflags "-X main.version=$version -X main.build=$env:APPVEYOR_BUILD_VERSION" -a -o release/drone-gcs.exe
       }
 
       docker pull microsoft/nanoserver:10.0.14393.1593
-      docker build -f Dockerfile.windows -t plugins/google-cloudstorage:windows-amd64 .
+      docker build -f Dockerfile.windows -t plugins/gcs:windows-amd64 .
 
 test_script:
   - ps: |
-      docker run --rm plugins/google-cloudstorage:windows-amd64 --version
+      docker run --rm plugins/gcs:windows-amd64 --version
 
 deploy_script:
   - ps: |
@@ -50,19 +50,19 @@ deploy_script:
         if ( $env:APPVEYOR_REPO_TAG -eq 'true' ) {
           $major,$minor,$patch = $env:APPVEYOR_REPO_TAG_NAME.substring(1).split('.')
 
-          docker push plugins/google-cloudstorage:windows-amd64
+          docker push plugins/gcs:windows-amd64
 
-          docker tag plugins/google-cloudstorage:windows-amd64 plugins/google-cloudstorage:$major.$minor.$patch-windows-amd64
-          docker push plugins/google-cloudstorage:$major.$minor.$patch-windows-amd64
+          docker tag plugins/gcs:windows-amd64 plugins/gcs:$major.$minor.$patch-windows-amd64
+          docker push plugins/gcs:$major.$minor.$patch-windows-amd64
 
-          docker tag plugins/google-cloudstorage:windows-amd64 plugins/google-cloudstorage:$major.$minor-windows-amd64
-          docker push plugins/google-cloudstorage:$major.$minor-windows-amd64
+          docker tag plugins/gcs:windows-amd64 plugins/gcs:$major.$minor-windows-amd64
+          docker push plugins/gcs:$major.$minor-windows-amd64
 
-          docker tag plugins/google-cloudstorage:windows-amd64 plugins/google-cloudstorage:$major-windows-amd64
-          docker push plugins/google-cloudstorage:$major-windows-amd64
+          docker tag plugins/gcs:windows-amd64 plugins/gcs:$major-windows-amd64
+          docker push plugins/gcs:$major-windows-amd64
         } else {
           if ( $env:APPVEYOR_REPO_BRANCH -eq 'master' ) {
-            docker push plugins/google-cloudstorage:windows-amd64
+            docker push plugins/gcs:windows-amd64
           }
         }
       }

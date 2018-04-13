@@ -1,4 +1,4 @@
-image: plugins/google-cloudstorage:{{#if build.tag}}{{trimPrefix build.tag "v"}}{{else}}latest{{/if}}
+image: plugins/gcs:{{#if build.tag}}{{trimPrefix build.tag "v"}}{{else}}latest{{/if}}
 {{#if build.tags}}
 tags:
 {{#each build.tags}}
@@ -7,27 +7,27 @@ tags:
 {{/if}}
 manifests:
   -
-    image: plugins/google-cloudstorage:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}linux-amd64
+    image: plugins/gcs:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}linux-amd64
     platform:
       architecture: amd64
       os: linux
   -
-    image: plugins/google-cloudstorage:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}linux-i386
+    image: plugins/gcs:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}linux-i386
     platform:
       architecture: 386
       os: linux
   -
-    image: plugins/google-cloudstorage:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}linux-arm64
+    image: plugins/gcs:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}linux-arm64
     platform:
       architecture: arm64
       os: linux
   -
-    image: plugins/google-cloudstorage:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}linux-arm
+    image: plugins/gcs:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}linux-arm
     platform:
       architecture: arm
       os: linux
   -
-    image: plugins/google-cloudstorage:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}windows-amd64
+    image: plugins/gcs:{{#if build.tag}}{{trimPrefix build.tag "v"}}-{{/if}}windows-amd64
     platform:
       architecture: amd64
       os: windows
