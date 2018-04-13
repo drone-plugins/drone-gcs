@@ -1,6 +1,6 @@
 workspace:
   base: /go
-  path: src/github.com/drone-plugins/drone-google-cloudstorage
+  path: src/github.com/drone-plugins/drone-gcs
 
 pipeline:
   deps:
@@ -28,9 +28,9 @@ pipeline:
     commands:
       - |
         if test "${DRONE_TAG}" = ""; then
-          go build -v -ldflags "-X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/amd64/drone-google-cloudstorage
+          go build -v -ldflags "-X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/amd64/drone-gcs
         else
-          go build -v -ldflags "-X main.version=${DRONE_TAG##v} -X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/amd64/drone-google-cloudstorage
+          go build -v -ldflags "-X main.version=${DRONE_TAG##v} -X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/amd64/drone-gcs
         fi
 
   build_linux_i386:
@@ -44,9 +44,9 @@ pipeline:
     commands:
       - |
         if test "${DRONE_TAG}" = ""; then
-          go build -v -ldflags "-X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/i386/drone-google-cloudstorage
+          go build -v -ldflags "-X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/i386/drone-gcs
         else
-          go build -v -ldflags "-X main.version=${DRONE_TAG##v} -X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/i386/drone-google-cloudstorage
+          go build -v -ldflags "-X main.version=${DRONE_TAG##v} -X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/i386/drone-gcs
         fi
 
   build_linux_arm64:
@@ -60,9 +60,9 @@ pipeline:
     commands:
       - |
         if test "${DRONE_TAG}" = ""; then
-          go build -v -ldflags "-X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/arm64/drone-google-cloudstorage
+          go build -v -ldflags "-X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/arm64/drone-gcs
         else
-          go build -v -ldflags "-X main.version=${DRONE_TAG##v} -X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/arm64/drone-google-cloudstorage
+          go build -v -ldflags "-X main.version=${DRONE_TAG##v} -X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/arm64/drone-gcs
         fi
 
   build_linux_arm:
@@ -77,9 +77,9 @@ pipeline:
     commands:
       - |
         if test "${DRONE_TAG}" = ""; then
-          go build -v -ldflags "-X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/arm/drone-google-cloudstorage
+          go build -v -ldflags "-X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/arm/drone-gcs
         else
-          go build -v -ldflags "-X main.version=${DRONE_TAG##v} -X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/arm/drone-google-cloudstorage
+          go build -v -ldflags "-X main.version=${DRONE_TAG##v} -X main.build=${DRONE_BUILD_NUMBER}" -a -o release/linux/arm/drone-gcs
         fi
 
   publish_linux_amd64:
@@ -87,7 +87,7 @@ pipeline:
     pull: true
     secrets: [ docker_username, docker_password ]
     group: docker
-    repo: plugins/google-cloudstorage
+    repo: plugins/gcs
     auto_tag: true
     auto_tag_suffix: linux-amd64
     dockerfile: Dockerfile
@@ -99,7 +99,7 @@ pipeline:
     pull: true
     secrets: [ docker_username, docker_password ]
     group: docker
-    repo: plugins/google-cloudstorage
+    repo: plugins/gcs
     auto_tag: true
     auto_tag_suffix: linux-i386
     dockerfile: Dockerfile.i386
@@ -111,7 +111,7 @@ pipeline:
     pull: true
     secrets: [ docker_username, docker_password ]
     group: docker
-    repo: plugins/google-cloudstorage
+    repo: plugins/gcs
     auto_tag: true
     auto_tag_suffix: linux-arm64
     dockerfile: Dockerfile.arm64
@@ -123,7 +123,7 @@ pipeline:
     pull: true
     secrets: [ docker_username, docker_password ]
     group: docker
-    repo: plugins/google-cloudstorage
+    repo: plugins/gcs
     auto_tag: true
     auto_tag_suffix: linux-arm
     dockerfile: Dockerfile.arm

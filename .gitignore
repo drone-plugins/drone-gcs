@@ -27,4 +27,4 @@ release/
 vendor/
 
 coverage.out
-drone-google-cloudstorage
+drone-gcs
