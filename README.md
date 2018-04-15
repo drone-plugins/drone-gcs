@@ -1,52 +1,40 @@
 # drone-gcs
 
 [![Build Status](http://beta.drone.io/api/badges/drone-plugins/drone-gcs/status.svg)](http://beta.drone.io/drone-plugins/drone-gcs)
-[![Coverage Status](https://aircover.co/badges/drone-plugins/drone-gcs/coverage.svg)](https://aircover.co/drone-plugins/drone-gcs)
-[![](https://badge.imagelayers.io/plugins/drone-gcs:latest.svg)](https://imagelayers.io/?images=plugins/drone-gcs:latest 'Get your own badge on imagelayers.io')
+[![Join the discussion at https://discourse.drone.io](https://img.shields.io/badge/discourse-forum-orange.svg)](https://discourse.drone.io)
+[![Drone questions at https://stackoverflow.com](https://img.shields.io/badge/drone-stackoverflow-orange.svg)](https://stackoverflow.com/questions/tagged/drone.io)
+[![Go Doc](https://godoc.org/github.com/drone-plugins/drone-gcs?status.svg)](http://godoc.org/github.com/drone-plugins/drone-gcs)
+[![Go Report](https://goreportcard.com/badge/github.com/drone-plugins/drone-gcs)](https://goreportcard.com/report/github.com/drone-plugins/drone-gcs)
+[![](https://images.microbadger.com/badges/image/plugins/gcs.svg)](https://microbadger.com/images/plugins/gcs "Get your own image badge on microbadger.com")
 
 Drone plugin to publish files and artifacts to Google Cloud Storage. For the usage information and a listing of the available options please take a look at [the docs](DOCS.md).
 
-## Binary
+## Build
 
-Build the binary using `make`:
+Build the binary with the following commands:
 
-```sh
-make deps build
 ```
-
-### Usage
-
-```sh
-./drone-gcs                             \
-  --auth-key <auth_key>                 \
-  --source "bin/"                       \
-  --target "bucket/path/"               \
-  --ignore "*.tmp"                      \
-  --acl    "allUsers:READER"            \
-  --acl    "user@domain.com:OWNER"      \
-  --gzip   "js"                         \
-  --gzip   "css"                        \
-  --cache-control "public,max-age=3600" \
-  --metadata '{"x-goog-meta-foo":"bar"}'
+go build
 ```
 
 ## Docker
 
-Build the container using `make`:
+Build the Docker image with the following commands:
 
-```sh
-make deps docker
+```
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -a -tags netgo -o release/linux/amd64/drone-gcs
+docker build --rm -t plugins/gcs .
 ```
 
-### Container usage
+### Usage
 
-```sh
-docker run --rm -i \
+```
+docker run --rm \
   -e PLUGIN_SOURCE="dist" \
   -e PLUGIN_TARGET="bucket/dir/" \
   -e PLUGIN_IGNORE="bin/*" \
   -e PLUGIN_ACL="allUsers:READER,user@domain.com:OWNER" \
-  -e PLUGIN_GZIP= "js,css,html" \
+  -e PLUGIN_GZIP="js,css,html" \
   -e PLUGIN_CACHE_CONTROL="public,max-age=3600" \
   -e PLUGIN_METADATA='{"x-goog-meta-foo":"bar"}' \
   -v $(pwd):$(pwd) \
