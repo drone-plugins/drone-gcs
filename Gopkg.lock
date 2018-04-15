@@ -15,12 +15,6 @@
   version = "v0.19.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/drone/drone-plugin-go"
-  packages = ["plugin"]
-  revision = "d6109f644c5935c22620081b4c234bb2263743c7"
-
-[[projects]]
   name = "github.com/golang/protobuf"
   packages = [
     "proto",
@@ -38,6 +32,12 @@
   packages = ["."]
   revision = "317e0006254c44a0ac427cc52a0e083ff0b9622f"
   version = "v2.0.0"
+
+[[projects]]
+  name = "github.com/urfave/cli"
+  packages = ["."]
+  revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
+  version = "v1.20.0"
 
 [[projects]]
   name = "go.opencensus.io"
@@ -181,6 +181,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2f08df62f1ac16d0f32a60658cb8c75e14c8b9373f97f2e8f47c83c5f11f0dd6"
+  inputs-digest = "05928e2405553a0c325f575d2c95d60a7e06188d112e1f258fafe7a3e2202fb4"
   solver-name = "gps-cdcl"
   solver-version = 1

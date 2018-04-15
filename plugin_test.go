@@ -29,11 +29,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
+	"cloud.google.com/go/storage"
 	"golang.org/x/net/context"
 	"google.golang.org/api/option"
-	"cloud.google.com/go/storage"
 )
 
 type fakeTransport struct {
@@ -73,34 +72,24 @@ func writeFile(t *testing.T, dir, name string, b []byte) {
 	}
 }
 
-func TestRetryUpload(t *testing.T) {
+func TestUploadFile(t *testing.T) {
 	wdir, err := ioutil.TempDir("", "drone-gcs-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	writeFile(t, wdir, "file", []byte("test"))
-	vargs.Source = wdir
-	sleep = func(time.Duration) {}
-	backoff := []int{0, 2, 4, 8, 16, 32, 64} // seconds
+	plugin.Source = wdir
 
 	tests := []struct {
-		nret, nerr int
-		ok         bool
+		retries, failOnRetry int
+		ok                   bool
 	}{
-		{0, 0, true},
-		{3, 0, true},
-		{1, 2, false},
+		{0, 1, true},
+		{3, 4, true},
+		{2, 1, false},
 	}
 	for i, test := range tests {
 		var n int
-
-		sleep = func(d time.Duration) {
-			a := time.Duration(backoff[n]) * time.Second
-			b := time.Duration(backoff[n]+1) * time.Second
-			if d < a || d > b {
-				t.Errorf("%d/%d: d = %v; want between %v and %v", i, n, d, a, b)
-			}
-		}
 
 		rt := &fakeTransport{func(r *http.Request) (*http.Response, error) {
 			_, mp, _ := mime.ParseMediaType(r.Header.Get("content-type"))
@@ -120,22 +109,32 @@ func TestRetryUpload(t *testing.T) {
 				ProtoMinor: 0,
 				StatusCode: http.StatusServiceUnavailable,
 			}
-			if n >= test.nerr {
+
+			// The storage.Client does not retry on 404s
+			// https://godoc.org/cloud.google.com/go/storage
+			// https://cloud.google.com/storage/docs/exponential-backoff
+			if n >= test.failOnRetry {
+				res.StatusCode = http.StatusNotFound
+			}
+
+			if n >= test.retries {
 				res.StatusCode = http.StatusOK
 			}
+
 			n++
 			return res, nil
 		}}
 		hc := &http.Client{Transport: rt}
 		client, _ := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
-		bucket = client.Bucket("bucket")
+		plugin.bucket = client.Bucket("bucket")
 
-		err := retryUpload("file", filepath.Join(wdir, "file"), test.nret)
+		err := plugin.uploadFile("file", filepath.Join(wdir, "file"))
+
 		switch {
 		case test.ok && err != nil:
 			t.Errorf("%d: %v", i, err)
 		case !test.ok && err == nil:
-			t.Errorf("%d: want error", i)
+			t.Errorf("%d: wanted error", i)
 		}
 	}
 }
@@ -163,15 +162,14 @@ func TestRun(t *testing.T) {
 		"dir/sub/file.css": {"text/css", []byte("sub style"), false},
 	}
 
-	workspace.Path = wdir
-	vargs.Source = "upload"
-	vargs.Target = "bucket/dir/"
-	vargs.Ignore = "sub/*.bin"
-	vargs.Gzip = []string{"js"}
-	vargs.CacheControl = "public,max-age=10"
-	vargs.Metadata = map[string]string{"x-foo": "bar"}
+	plugin.Source = wdir + "/upload"
+	plugin.Target = "bucket/dir/"
+	plugin.Ignore = "sub/*.bin"
+	plugin.Gzip = []string{"js"}
+	plugin.CacheControl = "public,max-age=10"
+	plugin.Metadata = map[string]string{"x-foo": "bar"}
 	acls := []storage.ACLRule{storage.ACLRule{Entity: "allUsers", Role: "READER"}}
-	vargs.ACL = []string{fmt.Sprintf("%s:%s", acls[0].Entity, acls[0].Role)}
+	plugin.ACL = []string{fmt.Sprintf("%s:%s", acls[0].Entity, acls[0].Role)}
 
 	var seenMu sync.Mutex // guards seen
 	seen := make(map[string]struct{}, len(files))
@@ -218,8 +216,8 @@ func TestRun(t *testing.T) {
 		if attrs.Bucket != "bucket" {
 			t.Errorf("attrs.Bucket = %q; want bucket", attrs.Bucket)
 		}
-		if attrs.CacheControl != vargs.CacheControl {
-			t.Errorf("attrs.CacheControl = %q; want %q", attrs.CacheControl, vargs.CacheControl)
+		if attrs.CacheControl != plugin.CacheControl {
+			t.Errorf("attrs.CacheControl = %q; want %q", attrs.CacheControl, plugin.CacheControl)
 		}
 		if obj.gzip && attrs.ContentEncoding != "gzip" {
 			t.Errorf("attrs.ContentEncoding = %q; want gzip", attrs.ContentEncoding)
@@ -230,8 +228,8 @@ func TestRun(t *testing.T) {
 		if !reflect.DeepEqual(attrs.ACL, acls) {
 			t.Errorf("attrs.ACL = %v; want %v", attrs.ACL, acls)
 		}
-		if !reflect.DeepEqual(attrs.Metadata, vargs.Metadata) {
-			t.Errorf("attrs.Metadata = %+v; want %+v", attrs.Metadata, vargs.Metadata)
+		if !reflect.DeepEqual(attrs.Metadata, plugin.Metadata) {
+			t.Errorf("attrs.Metadata = %+v; want %+v", attrs.Metadata, plugin.Metadata)
 		}
 
 		// media
@@ -255,7 +253,7 @@ func TestRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run(client)
+	plugin.Exec(client)
 	for k := range files {
 		if _, ok := seen[k]; !ok {
 			t.Errorf("%s didn't get uploaded", k)
