@@ -35,6 +35,8 @@ import (
 	"google.golang.org/api/option"
 )
 
+var plugin Plugin
+
 type fakeTransport struct {
 	f func(*http.Request) (*http.Response, error)
 }
@@ -78,7 +80,7 @@ func TestUploadFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeFile(t, wdir, "file", []byte("test"))
-	plugin.Source = wdir
+	plugin.Config.Source = wdir
 
 	tests := []struct {
 		retries, failOnRetry int
@@ -162,14 +164,14 @@ func TestRun(t *testing.T) {
 		"dir/sub/file.css": {"text/css", []byte("sub style"), false},
 	}
 
-	plugin.Source = wdir + "/upload"
-	plugin.Target = "bucket/dir/"
-	plugin.Ignore = "sub/*.bin"
-	plugin.Gzip = []string{"js"}
-	plugin.CacheControl = "public,max-age=10"
-	plugin.Metadata = map[string]string{"x-foo": "bar"}
+	plugin.Config.Source = wdir + "/upload"
+	plugin.Config.Target = "bucket/dir/"
+	plugin.Config.Ignore = "sub/*.bin"
+	plugin.Config.Gzip = []string{"js"}
+	plugin.Config.CacheControl = "public,max-age=10"
+	plugin.Config.Metadata = map[string]string{"x-foo": "bar"}
 	acls := []storage.ACLRule{storage.ACLRule{Entity: "allUsers", Role: "READER"}}
-	plugin.ACL = []string{fmt.Sprintf("%s:%s", acls[0].Entity, acls[0].Role)}
+	plugin.Config.ACL = []string{fmt.Sprintf("%s:%s", acls[0].Entity, acls[0].Role)}
 
 	var seenMu sync.Mutex // guards seen
 	seen := make(map[string]struct{}, len(files))
@@ -216,8 +218,8 @@ func TestRun(t *testing.T) {
 		if attrs.Bucket != "bucket" {
 			t.Errorf("attrs.Bucket = %q; want bucket", attrs.Bucket)
 		}
-		if attrs.CacheControl != plugin.CacheControl {
-			t.Errorf("attrs.CacheControl = %q; want %q", attrs.CacheControl, plugin.CacheControl)
+		if attrs.CacheControl != plugin.Config.CacheControl {
+			t.Errorf("attrs.CacheControl = %q; want %q", attrs.CacheControl, plugin.Config.CacheControl)
 		}
 		if obj.gzip && attrs.ContentEncoding != "gzip" {
 			t.Errorf("attrs.ContentEncoding = %q; want gzip", attrs.ContentEncoding)
@@ -228,8 +230,8 @@ func TestRun(t *testing.T) {
 		if !reflect.DeepEqual(attrs.ACL, acls) {
 			t.Errorf("attrs.ACL = %v; want %v", attrs.ACL, acls)
 		}
-		if !reflect.DeepEqual(attrs.Metadata, plugin.Metadata) {
-			t.Errorf("attrs.Metadata = %+v; want %+v", attrs.Metadata, plugin.Metadata)
+		if !reflect.DeepEqual(attrs.Metadata, plugin.Config.Metadata) {
+			t.Errorf("attrs.Metadata = %+v; want %+v", attrs.Metadata, plugin.Config.Metadata)
 		}
 
 		// media

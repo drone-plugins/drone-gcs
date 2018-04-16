@@ -1,17 +1,3 @@
-// Copyright 2015 Google Inc
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package main
 
 import (
@@ -22,31 +8,28 @@ import (
 	"os"
 
 	"cloud.google.com/go/storage"
+	"github.com/pkg/errors"
+	"github.com/urfave/cli"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
-
-	"github.com/urfave/cli"
 )
 
 var (
-	build  = "0"
-	plugin Plugin
+	version = "0.0.0"
+	build   = "0"
 )
 
 func main() {
-	fmt.Printf("Drone Google Cloud Storage Plugin build ID: %s\n", build)
-
 	app := cli.NewApp()
-	app.Name = "gcs artifact plugin"
-	app.Usage = "gcs artifact plugin"
+	app.Name = "gcs plugin"
+	app.Usage = "gcs plugin"
+	app.Version = fmt.Sprintf("%s+%s", version, build)
 	app.Action = run
-	app.Version = fmt.Sprintf("1.0.0+%s", build)
 	app.Flags = []cli.Flag{
-
 		cli.StringFlag{
 			Name:   "token",
 			Usage:  "google auth key",
-			EnvVar: "GOOGLE_CREDENTIALS,TOKEN",
+			EnvVar: "PLUGIN_TOKEN,GOOGLE_CREDENTIALS,TOKEN",
 		},
 		cli.StringSliceFlag{
 			Name:   "acl",
@@ -91,51 +74,51 @@ func main() {
 }
 
 func run(c *cli.Context) error {
-
-	var token, source, target string
-
-	// Check for required fields
-	if token = c.String("token"); token == "" {
-		return fmt.Errorf("Missing google credentials")
+	plugin := Plugin{
+		Config: Config{
+			Token:        c.String("token"),
+			ACL:          c.StringSlice("acl"),
+			Source:       c.String("source"),
+			Target:       c.String("target"),
+			Ignore:       c.String("ignore"),
+			Gzip:         c.StringSlice("gzip"),
+			CacheControl: c.String("cache-control"),
+		},
 	}
 
-	if source = c.String("source"); source == "" {
-		return fmt.Errorf("Missing source")
-	}
-
-	if target = c.String("target"); target == "" {
-		return fmt.Errorf("Missing target")
-	}
-
-	plugin = Plugin{
-		ACL:          c.StringSlice("acl"),
-		Source:       source,
-		Target:       target,
-		Ignore:       c.String("ignore"),
-		Gzip:         c.StringSlice("gzip"),
-		CacheControl: c.String("cache-control"),
-	}
-
-	m := c.String("metadata")
-
-	if m != "" {
+	if m := c.String("metadata"); m != "" {
 		var metadata map[string]string
-		err := json.Unmarshal([]byte(c.String("metadata")), &metadata)
-		if err != nil {
-			log.Fatalf("Error parsing metadata field: %v", err)
+
+		if err := json.Unmarshal([]byte(m), &metadata); err != nil {
+			return errors.Wrap(err, "error parsing metadata field")
 		}
-		plugin.Metadata = metadata
+
+		plugin.Config.Metadata = metadata
 	}
 
-	// Prepare Google Storage client
-	auth, err := google.JWTConfigFromJSON([]byte(token), storage.ScopeFullControl)
-	if err != nil {
-		log.Fatalf("auth: %v", err)
+	if plugin.Config.Token == "" {
+		return errors.New("Missing google credentials")
 	}
+
+	if plugin.Config.Source == "" {
+		return errors.New("Missing source")
+	}
+
+	if plugin.Config.Target == "" {
+		return errors.New("Missing target")
+	}
+
+	auth, err := google.JWTConfigFromJSON([]byte(plugin.Config.Token), storage.ScopeFullControl)
+
+	if err != nil {
+		return errors.Wrap(err, "failed to authenticate token")
+	}
+
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithTokenSource(auth.TokenSource(ctx)))
+
 	if err != nil {
-		log.Fatalf("storage client: %v", err)
+		return errors.Wrap(err, "failed to initialize storage")
 	}
 
 	return plugin.Exec(client)

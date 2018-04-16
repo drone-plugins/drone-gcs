@@ -8,11 +8,12 @@
     "iam",
     "internal",
     "internal/optional",
+    "internal/trace",
     "internal/version",
     "storage"
   ]
-  revision = "20d4028b8a750c2aca76bf9fefa8ed2d0109b573"
-  version = "v0.19.0"
+  revision = "29f476ffa9c4cd4fd14336b6043090ac1ad76733"
+  version = "v0.21.0"
 
 [[projects]]
   name = "github.com/golang/protobuf"
@@ -34,6 +35,12 @@
   version = "v2.0.0"
 
 [[projects]]
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
   name = "github.com/urfave/cli"
   packages = ["."]
   revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
@@ -42,20 +49,21 @@
 [[projects]]
   name = "go.opencensus.io"
   packages = [
+    "exporter/stackdriver/propagation",
     "internal",
     "internal/tagencoding",
     "plugin/ochttp",
     "plugin/ochttp/propagation/b3",
-    "plugin/ochttp/propagation/google",
     "stats",
     "stats/internal",
     "stats/view",
     "tag",
     "trace",
+    "trace/internal",
     "trace/propagation"
   ]
-  revision = "52b12e1eb8fdf769ad0bf5fd73a2af9484e6b196"
-  version = "v0.4.0"
+  revision = "0095aec66ae14801c6711210f6f0716411cefdd3"
+  version = "v0.8.0"
 
 [[projects]]
   branch = "master"
@@ -70,7 +78,7 @@
     "lex/httplex",
     "trace"
   ]
-  revision = "e0c57d8f86c17f0724497efcb3bc617e82834821"
+  revision = "500e7a4f953ddaf55d316b4d3adc516aa0379622"
 
 [[projects]]
   branch = "master"
@@ -82,7 +90,7 @@
     "jws",
     "jwt"
   ]
-  revision = "fdc9e635145ae97e6c2cb777c48305600cf515cb"
+  revision = "921ae394b9430ed4fb549668d7b087601bd60a81"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -119,7 +127,7 @@
     "storage/v1",
     "transport/http"
   ]
-  revision = "c24aa0e5ed34558ea50c016e4fb92c5e9aa69f2c"
+  revision = "fca24fcb41126b846105a93fb9e30f416bdd55ce"
 
 [[projects]]
   name = "google.golang.org/appengine"
@@ -144,9 +152,10 @@
   packages = [
     "googleapis/api/annotations",
     "googleapis/iam/v1",
+    "googleapis/rpc/code",
     "googleapis/rpc/status"
   ]
-  revision = "f8c8703595236ae70fdf8789ecb656ea0bcdcf46"
+  revision = "7fd901a49ba6a7f87732eb344f6e3c5b19d1b200"
 
 [[projects]]
   name = "google.golang.org/grpc"
@@ -175,12 +184,12 @@
     "tap",
     "transport"
   ]
-  revision = "8e4536a86ab602859c20df5ebfd0bd4228d08655"
-  version = "v1.10.0"
+  revision = "d11072e7ca9811b1100b80ca0269ac831f06d024"
+  version = "v1.11.3"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "05928e2405553a0c325f575d2c95d60a7e06188d112e1f258fafe7a3e2202fb4"
+  inputs-digest = "1cb9f89a3e9dce4ebf9ea5796cf7ab7991bfff571b483f488822ae55ce987acb"
   solver-name = "gps-cdcl"
   solver-version = 1
