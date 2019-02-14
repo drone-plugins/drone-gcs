@@ -1,0 +1,10 @@
+# escape=`
+FROM plugins/base:windows-1803
+
+LABEL maintainer="Drone.IO Community <drone-dev@googlegroups.com>" `
+  org.label-schema.name="Drone GCS" `
+  org.label-schema.vendor="Drone.IO Community" `
+  org.label-schema.schema-version="1.0"
+
+ADD release\drone-gcs.exe c:\drone-gcs.exe
+ENTRYPOINT [ "c:\\drone-gcs.exe" ]
