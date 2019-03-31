@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 
@@ -15,16 +14,15 @@ import (
 )
 
 var (
-	version = "0.0.0"
-	build   = "0"
+	version = "unknown"
 )
 
 func main() {
 	app := cli.NewApp()
 	app.Name = "gcs plugin"
 	app.Usage = "gcs plugin"
-	app.Version = fmt.Sprintf("%s+%s", version, build)
 	app.Action = run
+	app.Version = version
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "token",
