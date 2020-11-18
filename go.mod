@@ -1,5 +1,7 @@
 module github.com/drone-plugins/drone-gcs
 
+go 1.15
+
 require (
 	cloud.google.com/go v0.21.0
 	github.com/golang/protobuf v1.0.0
