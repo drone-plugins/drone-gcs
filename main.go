@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
@@ -15,7 +16,8 @@ import (
 )
 
 const (
-	credentialFilePath = "credentials"
+	credDirName  = "drone-gcs"
+	credFileName = "cred"
 )
 
 var (
@@ -120,7 +122,14 @@ func run(c *cli.Context) error {
 			return err
 		}
 	} else if c.String("json-key") != "" {
-		client, err = gcsClientWithJSONKey(c.String("json-key"))
+		dir, err := ioutil.TempDir("", credDirName)
+		if err != nil {
+			return errors.Wrap(err, "failed to create temporary directory")
+		}
+		defer os.RemoveAll(dir) // clean up
+
+		credFilePath := filepath.Join(dir, credFileName)
+		client, err = gcsClientWithJSONKey(c.String("json-key"), credFilePath)
 		if err != nil {
 			return err
 		}
@@ -145,14 +154,14 @@ func gcsClientWithToken(token string) (*storage.Client, error) {
 	return client, nil
 }
 
-func gcsClientWithJSONKey(jsonKey string) (*storage.Client, error) {
-	err := ioutil.WriteFile(credentialFilePath, []byte(jsonKey), 0644)
+func gcsClientWithJSONKey(jsonKey, credFilePath string) (*storage.Client, error) {
+	err := ioutil.WriteFile(credFilePath, []byte(jsonKey), 0644)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create gcs credentials file")
 	}
 
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credentialFilePath))
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFilePath))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize storage")
 	}
