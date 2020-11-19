@@ -6,18 +6,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
-)
-
-const (
-	credDirName  = "drone-gcs"
-	credFileName = "cred"
 )
 
 var (
@@ -122,14 +116,18 @@ func run(c *cli.Context) error {
 			return err
 		}
 	} else if c.String("json-key") != "" {
-		dir, err := ioutil.TempDir("", credDirName)
+		err := os.MkdirAll(os.TempDir(), 0600)
 		if err != nil {
 			return errors.Wrap(err, "failed to create temporary directory")
 		}
-		defer os.RemoveAll(dir) // clean up
 
-		credFilePath := filepath.Join(dir, credFileName)
-		client, err = gcsClientWithJSONKey(c.String("json-key"), credFilePath)
+		tmpfile, err := ioutil.TempFile("", "")
+		if err != nil {
+			return errors.Wrap(err, "failed to create temporary file")
+		}
+		defer os.Remove(tmpfile.Name()) // clean up
+
+		client, err = gcsClientWithJSONKey(c.String("json-key"), tmpfile)
 		if err != nil {
 			return err
 		}
@@ -153,15 +151,16 @@ func gcsClientWithToken(token string) (*storage.Client, error) {
 	}
 	return client, nil
 }
-
-func gcsClientWithJSONKey(jsonKey, credFilePath string) (*storage.Client, error) {
-	err := ioutil.WriteFile(credFilePath, []byte(jsonKey), 0644)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create gcs credentials file")
+func gcsClientWithJSONKey(jsonKey string, credFile *os.File) (*storage.Client, error) {
+	if _, err := credFile.Write([]byte(jsonKey)); err != nil {
+		return nil, errors.Wrap(err, "failed to write gcs credentials to file")
+	}
+	if err := credFile.Close(); err != nil {
+		return nil, errors.Wrap(err, "failed to close gcs credentials file")
 	}
 
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFilePath))
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFile.Name()))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize storage")
 	}
