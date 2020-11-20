@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -28,6 +29,11 @@ func main() {
 			Name:   "token",
 			Usage:  "google auth key",
 			EnvVar: "PLUGIN_TOKEN,GOOGLE_CREDENTIALS,TOKEN",
+		},
+		cli.StringFlag{
+			Name:   "json-key",
+			Usage:  "google json keys",
+			EnvVar: "PLUGIN_JSON_KEY",
 		},
 		cli.StringSliceFlag{
 			Name:   "acl",
@@ -94,10 +100,6 @@ func run(c *cli.Context) error {
 		plugin.Config.Metadata = metadata
 	}
 
-	if plugin.Config.Token == "" {
-		return errors.New("Missing google credentials")
-	}
-
 	if plugin.Config.Source == "" {
 		return errors.New("Missing source")
 	}
@@ -106,18 +108,61 @@ func run(c *cli.Context) error {
 		return errors.New("Missing target")
 	}
 
-	auth, err := google.JWTConfigFromJSON([]byte(plugin.Config.Token), storage.ScopeFullControl)
+	var client *storage.Client
+	var err error
+	if plugin.Config.Token != "" {
+		client, err = gcsClientWithToken(plugin.Config.Token)
+		if err != nil {
+			return err
+		}
+	} else if c.String("json-key") != "" {
+		err := os.MkdirAll(os.TempDir(), 0600)
+		if err != nil {
+			return errors.Wrap(err, "failed to create temporary directory")
+		}
 
+		tmpfile, err := ioutil.TempFile("", "")
+		if err != nil {
+			return errors.Wrap(err, "failed to create temporary file")
+		}
+		defer os.Remove(tmpfile.Name()) // clean up
+
+		client, err = gcsClientWithJSONKey(c.String("json-key"), tmpfile)
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("Either one of token or json key must be specified")
+	}
+
+	return plugin.Exec(client)
+}
+
+func gcsClientWithToken(token string) (*storage.Client, error) {
+	auth, err := google.JWTConfigFromJSON([]byte(token), storage.ScopeFullControl)
 	if err != nil {
-		return errors.Wrap(err, "failed to authenticate token")
+		return nil, errors.Wrap(err, "failed to authenticate token")
 	}
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithTokenSource(auth.TokenSource(ctx)))
-
 	if err != nil {
-		return errors.Wrap(err, "failed to initialize storage")
+		return nil, errors.Wrap(err, "failed to initialize storage")
+	}
+	return client, nil
+}
+func gcsClientWithJSONKey(jsonKey string, credFile *os.File) (*storage.Client, error) {
+	if _, err := credFile.Write([]byte(jsonKey)); err != nil {
+		return nil, errors.Wrap(err, "failed to write gcs credentials to file")
+	}
+	if err := credFile.Close(); err != nil {
+		return nil, errors.Wrap(err, "failed to close gcs credentials file")
 	}
 
-	return plugin.Exec(client)
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFile.Name()))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize storage")
+	}
+	return client, nil
 }
