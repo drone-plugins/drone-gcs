@@ -1,9 +1,11 @@
-FROM plugins/base:multiarch
+FROM arm64v8/alpine:3.12
 
 LABEL maintainer="Drone.IO Community <drone-dev@googlegroups.com>" \
   org.label-schema.name="Drone GCS" \
   org.label-schema.vendor="Drone.IO Community" \
   org.label-schema.schema-version="1.0"
 
+RUN mkdir -p /tmp
+RUN chmod 777 /tmp
 ADD release/linux/arm64/drone-gcs /bin/
 ENTRYPOINT ["/bin/drone-gcs"]
