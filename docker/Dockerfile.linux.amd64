@@ -7,5 +7,6 @@ LABEL maintainer="Drone.IO Community <drone-dev@googlegroups.com>" \
 
 RUN mkdir -p /tmp
 RUN chmod 777 /tmp
+
 ADD release/linux/amd64/drone-gcs /bin/
 ENTRYPOINT ["/bin/drone-gcs"]
