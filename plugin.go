@@ -30,8 +30,11 @@ type (
 		// Copies the files from the specified directory.
 		Source string
 
-		// Destination to copy files to, including bucket name
+		// Destination bucket to copy files to, can include folder path
 		Target string
+
+		// Destination folder path to copy files to, will be appended to target
+		Folder string
 
 		// Exclude files matching this pattern.
 		Ignore string
@@ -113,11 +116,11 @@ func (p *Plugin) Exec(client *storage.Client) error {
 			rel, err := filepath.Rel(p.Config.Source, f)
 
 			if err != nil {
-				res <- &result{f, err}
+				res <- &result{rel, err}
 				return
 			}
 
-			err = p.uploadFile(path.Join(p.Config.Target, rel), f)
+			err = p.uploadFile(f)
 			res <- &result{rel, err}
 
 			<-buf // free up
@@ -146,9 +149,26 @@ func (p *Plugin) errorf(format string, args ...interface{}) {
 	p.printf(format, args...)
 }
 
-// uploadFile uploads the file to dst using global bucket.
+// objectFolderPath returns a bucket object folder name based on plugin target and folder values.
+// It is intended that the bucket name has already been stripped from the target.
+func (p *Plugin) objectFolderPath() string {
+	return path.Join(p.Config.Target, p.Config.Folder)
+}
+
+// objectFolderPathForFile returns a bucket object name including a resolved object folder path.
+func (p *Plugin) objectFolderPathForFile(file string) (string, error) {
+	rel, err := filepath.Rel(p.Config.Source, file)
+
+	if err != nil {
+		return "", err
+	}
+
+	return path.Join(p.objectFolderPath(), rel), nil
+}
+
+// uploadFile uploads the file, relative to plugin source directory, to dst using global bucket.
 // To get a more robust upload use retryUpload instead.
-func (p *Plugin) uploadFile(dst, file string) error {
+func (p *Plugin) uploadFile(file string) error {
 	r, gz, err := p.gzipper(file)
 
 	if err != nil {
@@ -156,13 +176,11 @@ func (p *Plugin) uploadFile(dst, file string) error {
 	}
 
 	defer r.Close()
-	rel, err := filepath.Rel(p.Config.Source, file)
 
+	name, err := p.objectFolderPathForFile(file)
 	if err != nil {
 		return err
 	}
-
-	name := path.Join(p.Config.Target, rel)
 	w := p.bucket.Object(name).NewWriter(context.Background())
 	w.CacheControl = p.Config.CacheControl
 	w.Metadata = p.Config.Metadata

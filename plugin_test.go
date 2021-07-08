@@ -130,7 +130,7 @@ func TestUploadFile(t *testing.T) {
 		client, _ := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
 		plugin.bucket = client.Bucket("bucket")
 
-		err := plugin.uploadFile("file", filepath.Join(wdir, "file"))
+		err = plugin.uploadFile(filepath.Join(wdir, "file"))
 
 		switch {
 		case test.ok && err != nil:
@@ -154,18 +154,7 @@ func TestRun(t *testing.T) {
 	writeFile(t, subdir, "file.css", []byte("sub style"))
 	writeFile(t, subdir, "file.bin", []byte("rubbish"))
 
-	files := map[string]*struct {
-		ctype string
-		body  []byte
-		gzip  bool
-	}{
-		"dir/file.txt":     {"text/plain", []byte("text"), false},
-		"dir/file.js":      {"application/javascript", []byte("javascript"), true},
-		"dir/sub/file.css": {"text/css", []byte("sub style"), false},
-	}
-
 	plugin.Config.Source = wdir + "/upload"
-	plugin.Config.Target = "bucket/dir/"
 	plugin.Config.Ignore = "sub/*.bin"
 	plugin.Config.Gzip = []string{"js"}
 	plugin.Config.CacheControl = "public,max-age=10"
@@ -173,92 +162,153 @@ func TestRun(t *testing.T) {
 	acls := []storage.ACLRule{storage.ACLRule{Entity: "allUsers", Role: "READER"}}
 	plugin.Config.ACL = []string{fmt.Sprintf("%s:%s", acls[0].Entity, acls[0].Role)}
 
-	var seenMu sync.Mutex // guards seen
-	seen := make(map[string]struct{}, len(files))
-
-	rt := &fakeTransport{func(r *http.Request) (resp *http.Response, e error) {
-		resp = &http.Response{
-			Body:       ioutil.NopCloser(strings.NewReader(`{"name": "fake"}`)),
-			Proto:      "HTTP/1.0",
-			ProtoMajor: 1,
-			ProtoMinor: 0,
-			StatusCode: http.StatusOK,
-		}
-
-		if !strings.HasSuffix(r.URL.Path, "/bucket/o") {
-			t.Errorf("r.URL.Path = %q; want /bucket/o suffix", r.URL.Path)
-		}
-		_, mp, err := mime.ParseMediaType(r.Header.Get("content-type"))
-		if err != nil {
-			t.Errorf("ParseMediaType: %v", err)
-			return
-		}
-		mr := multipart.NewReader(r.Body, mp["boundary"])
-
-		// metadata
-		p, err := mr.NextPart()
-		if err != nil {
-			t.Errorf("meta NextPart: %v", err)
-			return
-		}
-		var attrs storage.ObjectAttrs
-		if err := json.NewDecoder(p).Decode(&attrs); err != nil {
-			t.Errorf("meta json: %v", err)
-			return
-		}
-		seenMu.Lock()
-		seen[attrs.Name] = struct{}{}
-		seenMu.Unlock()
-		obj := files[attrs.Name]
-		if obj == nil {
-			t.Errorf("unexpected obj: %+v", attrs)
-			return
-		}
-
-		if attrs.Bucket != "bucket" {
-			t.Errorf("attrs.Bucket = %q; want bucket", attrs.Bucket)
-		}
-		if attrs.CacheControl != plugin.Config.CacheControl {
-			t.Errorf("attrs.CacheControl = %q; want %q", attrs.CacheControl, plugin.Config.CacheControl)
-		}
-		if obj.gzip && attrs.ContentEncoding != "gzip" {
-			t.Errorf("attrs.ContentEncoding = %q; want gzip", attrs.ContentEncoding)
-		}
-		if !strings.HasPrefix(attrs.ContentType, obj.ctype) {
-			t.Errorf("attrs.ContentType = %q; want %q", attrs.ContentType, obj.ctype)
-		}
-		if !reflect.DeepEqual(attrs.ACL, acls) {
-			t.Errorf("attrs.ACL = %v; want %v", attrs.ACL, acls)
-		}
-		if !reflect.DeepEqual(attrs.Metadata, plugin.Config.Metadata) {
-			t.Errorf("attrs.Metadata = %+v; want %+v", attrs.Metadata, plugin.Config.Metadata)
-		}
-
-		// media
-		p, err = mr.NextPart()
-		if err != nil {
-			t.Errorf("media NextPart: %v", err)
-			return
-		}
-		b, _ := ioutil.ReadAll(p)
-		if attrs.ContentEncoding == "gzip" {
-			b = gunzip(t, b)
-		}
-		if bytes.Compare(b, obj.body) != 0 {
-			t.Errorf("media b = %q; want %q", b, obj.body)
-		}
-		return
-	}}
-
-	hc := &http.Client{Transport: rt}
-	client, err := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
-	if err != nil {
-		t.Fatal(err)
+	type filesMapEntry struct {
+		ctype string
+		body  []byte
+		gzip  bool
 	}
-	plugin.Exec(client)
-	for k := range files {
-		if _, ok := seen[k]; !ok {
-			t.Errorf("%s didn't get uploaded", k)
-		}
+
+	testCases := []struct {
+		name         string
+		files        map[string]*filesMapEntry
+		pluginTarget string
+		pluginFolder string
+	}{
+		{
+			name: "target with bucket only",
+			files: map[string]*filesMapEntry{
+				"file.txt":     {"text/plain", []byte("text"), false},
+				"file.js":      {"application/javascript", []byte("javascript"), true},
+				"sub/file.css": {"text/css", []byte("sub style"), false},
+			},
+			pluginTarget: "bucket",
+		},
+		{
+			name: "target with bucket and subdir",
+			files: map[string]*filesMapEntry{
+				"dir/file.txt":     {"text/plain", []byte("text"), false},
+				"dir/file.js":      {"application/javascript", []byte("javascript"), true},
+				"dir/sub/file.css": {"text/css", []byte("sub style"), false},
+			},
+			pluginTarget: "bucket/dir",
+		},
+		{
+			name: "target with bucket and folder",
+			files: map[string]*filesMapEntry{
+				"folderpath/file.txt":     {"text/plain", []byte("text"), false},
+				"folderpath/file.js":      {"application/javascript", []byte("javascript"), true},
+				"folderpath/sub/file.css": {"text/css", []byte("sub style"), false},
+			},
+			pluginTarget: "bucket",
+			pluginFolder: "folderpath",
+		},
+		{
+			name: "target with bucket, subdir and folder",
+			files: map[string]*filesMapEntry{
+				"dir/folderpath/foldersub/file.txt":     {"text/plain", []byte("text"), false},
+				"dir/folderpath/foldersub/file.js":      {"application/javascript", []byte("javascript"), true},
+				"dir/folderpath/foldersub/sub/file.css": {"text/css", []byte("sub style"), false},
+			},
+			pluginTarget: "bucket/dir",
+			pluginFolder: "folderpath/foldersub",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var seenMu sync.Mutex // guards seen
+			seen := make(map[string]struct{}, len(testCase.files))
+
+			rt := &fakeTransport{func(r *http.Request) (resp *http.Response, e error) {
+				resp = &http.Response{
+					Body:       ioutil.NopCloser(strings.NewReader(`{"name": "fake"}`)),
+					Proto:      "HTTP/1.0",
+					ProtoMajor: 1,
+					ProtoMinor: 0,
+					StatusCode: http.StatusOK,
+				}
+
+				if !strings.HasSuffix(r.URL.Path, "/bucket/o") {
+					t.Errorf("r.URL.Path = %q; want /bucket/o suffix", r.URL.Path)
+				}
+				_, mp, err := mime.ParseMediaType(r.Header.Get("content-type"))
+				if err != nil {
+					t.Errorf("ParseMediaType: %v", err)
+					return
+				}
+				mr := multipart.NewReader(r.Body, mp["boundary"])
+
+				// metadata
+				p, err := mr.NextPart()
+				if err != nil {
+					t.Errorf("meta NextPart: %v", err)
+					return
+				}
+				var attrs storage.ObjectAttrs
+				if err := json.NewDecoder(p).Decode(&attrs); err != nil {
+					t.Errorf("meta json: %v", err)
+					return
+				}
+				seenMu.Lock()
+				seen[attrs.Name] = struct{}{}
+				seenMu.Unlock()
+				obj := testCase.files[attrs.Name]
+				if obj == nil {
+					t.Errorf("unexpected obj: %+v", attrs)
+					return
+				}
+
+				if attrs.Bucket != "bucket" {
+					t.Errorf("attrs.Bucket = %q; want bucket", attrs.Bucket)
+				}
+				if attrs.CacheControl != plugin.Config.CacheControl {
+					t.Errorf("attrs.CacheControl = %q; want %q", attrs.CacheControl, plugin.Config.CacheControl)
+				}
+				if obj.gzip && attrs.ContentEncoding != "gzip" {
+					t.Errorf("attrs.ContentEncoding = %q; want gzip", attrs.ContentEncoding)
+				}
+				if !strings.HasPrefix(attrs.ContentType, obj.ctype) {
+					t.Errorf("attrs.ContentType = %q; want %q", attrs.ContentType, obj.ctype)
+				}
+				if !reflect.DeepEqual(attrs.ACL, acls) {
+					t.Errorf("attrs.ACL = %v; want %v", attrs.ACL, acls)
+				}
+				if !reflect.DeepEqual(attrs.Metadata, plugin.Config.Metadata) {
+					t.Errorf("attrs.Metadata = %+v; want %+v", attrs.Metadata, plugin.Config.Metadata)
+				}
+
+				// media
+				p, err = mr.NextPart()
+				if err != nil {
+					t.Errorf("media NextPart: %v", err)
+					return
+				}
+				b, _ := ioutil.ReadAll(p)
+				if attrs.ContentEncoding == "gzip" {
+					b = gunzip(t, b)
+				}
+				if bytes.Compare(b, obj.body) != 0 {
+					t.Errorf("media b = %q; want %q", b, obj.body)
+				}
+				return
+			}}
+
+			hc := &http.Client{Transport: rt}
+			client, err := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			plugin.Config.Target = testCase.pluginTarget
+			plugin.Config.Folder = testCase.pluginFolder
+
+			plugin.Exec(client)
+
+			for k := range testCase.files {
+				if _, ok := seen[k]; !ok {
+					t.Errorf("%s didn't get uploaded", k)
+				}
+			}
+		})
 	}
 }

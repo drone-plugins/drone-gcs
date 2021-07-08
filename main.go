@@ -52,8 +52,13 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:   "target",
-			Usage:  "destination to copy files to, including bucket name",
+			Usage:  "destination bucket to copy files to, can include folder path",
 			EnvVar: "PLUGIN_TARGET",
+		},
+		cli.StringFlag{
+			Name:   "folder",
+			Usage:  "destination folder path to copy files to, will be appended to target",
+			EnvVar: "PLUGIN_FOLDER",
 		},
 		cli.StringSliceFlag{
 			Name:   "gzip",
@@ -84,6 +89,7 @@ func run(c *cli.Context) error {
 			ACL:          c.StringSlice("acl"),
 			Source:       c.String("source"),
 			Target:       c.String("target"),
+			Folder:       c.String("folder"),
 			Ignore:       c.String("ignore"),
 			Gzip:         c.StringSlice("gzip"),
 			CacheControl: c.String("cache-control"),
