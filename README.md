@@ -49,3 +49,55 @@ docker run --rm \
   -w $(pwd) \
   plugins/gcs
 ```
+
+#### Optional object folder setting
+
+The object folder can be specified as part of the `PLUGIN_TARGET` or as part of the `PLUGIN_FOLDER` setting. The value
+of the `PLUGIN_FOLDER` setting will be appended to any value supplied as part of the `PLUGIN_TARGET`.
+
+```console
+docker run --rm \
+  -e PLUGIN_SOURCE="dist" \
+  -e PLUGIN_TARGET="bucket/dir/" \
+  -e PLUGIN_FOLDER="${DRONE_PULL_REQUEST}" \
+  -e PLUGIN_IGNORE="bin/*" \
+  -e PLUGIN_ACL="allUsers:READER,user@domain.com:OWNER" \
+  -e PLUGIN_GZIP="js,css,html" \
+  -e PLUGIN_CACHE_CONTROL="public,max-age=3600" \
+  -e PLUGIN_METADATA='{"x-goog-meta-foo":"bar"}' \
+  -v $(pwd):$(pwd) \
+  -w $(pwd) \
+  plugins/gcs
+```
+
+One potential use case for specifying the `PLUGIN_FOLDER` separately is when storing the value for `PLUGIN_TARGET` as a
+drone secret while needing to generate a final object folder value during CI. The above example illustrates how it may
+be possible to publish to `bucket/dir/DRONE_PULL_REQUEST`.
+
+Perhaps a more illustrative example:
+
+```yaml
+kind: pipeline
+name: upload prs
+
+trigger:
+  branch:
+    include:
+      - develop
+  event:
+    - pull_request
+
+steps: 
+  - name: upload to cloud storage prs bucket
+    image: plugins/gcs
+    settings:
+      source: build
+      target:
+        from_secret: prs_bucket
+      folder: "prs/${DRONE_PULL_REQUEST}"
+      gzip: js,css,html
+      token:
+        from_secret: prs_token
+```
+
+The above drone configuration file is not meant to be complete.
