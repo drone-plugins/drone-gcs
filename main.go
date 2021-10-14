@@ -10,6 +10,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 )
@@ -34,6 +35,11 @@ func main() {
 			Name:   "json-key",
 			Usage:  "google json keys",
 			EnvVar: "PLUGIN_JSON_KEY",
+		},
+		cli.StringFlag{
+			Name: "oauth-token",
+			Usage: "Bearer token used for authenticating requests to GCS",
+			EnvVar: "PLUGIN_OAUTH_TOKEN,OAUTH_TOKEN",
 		},
 		cli.StringSliceFlag{
 			Name:   "acl",
@@ -131,8 +137,13 @@ func run(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
+	} else if c.String("oauth-token") != "" {
+		client, err = gcsClientWithOauthToken(c.String("oauth-token"))
+		if err != nil {
+			return err
+		}
 	} else {
-		return errors.New("Either one of token or json key must be specified")
+		return errors.New("Either one of token, oauth token, or json key must be specified")
 	}
 
 	return plugin.Exec(client)
@@ -161,6 +172,16 @@ func gcsClientWithJSONKey(jsonKey string, credFile *os.File) (*storage.Client, e
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFile.Name()))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize storage")
+	}
+	return client, nil
+}
+
+func gcsClientWithOauthToken(oauthToken string) (*storage.Client, error) {
+	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: oauthToken, TokenType: "Bearer"})
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize storage")
 	}
