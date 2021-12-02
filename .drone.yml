@@ -313,7 +313,7 @@ steps:
   # publish docker images for tag events.
   - go build -o release/windows/amd64/drone-gcs.exe
   - docker login -u $env:USERNAME -p $env:PASSWORD
-  - docker build -f docker/Dockerfile.windows.1809.amd64 -t plugins/gcs:windows-1809-amd64 .
+  - docker build -f docker/Dockerfile.windows.1809 -t plugins/gcs:windows-1809-amd64 .
   - docker push plugins/gcs:windows-1809-amd64
   environment:
     CGO_ENABLED: "0"
@@ -353,7 +353,7 @@ steps:
   - echo $env:DRONE_SEMVER_SHORT
   - go build -o release/windows/amd64/drone-gcs.exe
   - docker login -u $env:USERNAME -p $env:PASSWORD
-  - docker build -f docker/Dockerfile.windows.1903.amd64 -t plugins/gcs:windows-1903-amd64 .
+  - docker build -f docker/Dockerfile.windows.1903 -t plugins/gcs:windows-1903-amd64 .
   - docker push plugins/gcs:windows-1903-amd64
   environment:
     CGO_ENABLED: "0"
