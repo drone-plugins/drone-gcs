@@ -81,7 +81,7 @@ steps:
 
 - name: dryrun
   pull: always
-  image: plugins/docker:20.10.9-linux-amd64
+  image: plugins/docker:linux-amd64
   settings:
     daemon_off: false
     dockerfile: docker/Dockerfile.linux.amd64
@@ -165,7 +165,7 @@ steps:
 
 - name: dryrun
   pull: always
-  image: plugins/docker:20.10.9-linux-arm64
+  image: plugins/docker:linux-arm64
   settings:
     daemon_off: false
     dockerfile: docker/Dockerfile.linux.arm64
@@ -249,7 +249,7 @@ steps:
 
 - name: dryrun
   pull: always
-  image: plugins/docker:20.10.9-linux-arm
+  image: plugins/docker:linux-arm
   settings:
     daemon_off: false
     dockerfile: docker/Dockerfile.linux.arm
