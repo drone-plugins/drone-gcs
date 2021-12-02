@@ -313,8 +313,14 @@ steps:
   # publish docker images for tag events.
   - go build -o release/windows/amd64/drone-gcs.exe
   - docker login -u $env:USERNAME -p $env:PASSWORD
-  - docker build -f docker/Dockerfile.windows.1809 -t plugins/gcs:windows-1809-amd64 .
-  - docker push plugins/gcs:windows-1809-amd64
+  - |
+    if (Test-Path env:DRONE_SEMVER_SHORT) {
+      docker build -f docker/Dockerfile.windows.1809 -t plugins/gcs:v$env:DRONE_SEMVER_SHORT-windows-1809-amd64 .
+      docker push plugins/gcs:v$env:DRONE_SEMVER_SHORT-windows-1809-amd64 .
+    } else {
+      docker build -f docker/Dockerfile.windows.1809 -t plugins/gcs:windows-1809-amd64 .
+      docker push plugins/gcs:windows-1809-amd64
+    }
   environment:
     CGO_ENABLED: "0"
     USERNAME:
@@ -325,7 +331,6 @@ steps:
 trigger:
   event:
   - push
-  - pull_request
 
 depends_on:
 - testing
@@ -353,8 +358,14 @@ steps:
   - echo $env:DRONE_SEMVER_SHORT
   - go build -o release/windows/amd64/drone-gcs.exe
   - docker login -u $env:USERNAME -p $env:PASSWORD
-  - docker build -f docker/Dockerfile.windows.1903 -t plugins/gcs:windows-1903-amd64 .
-  - docker push plugins/gcs:windows-1903-amd64
+  - |
+    if (Test-Path env:DRONE_SEMVER_SHORT) {
+      docker build -f docker/Dockerfile.windows.1903 -t plugins/gcs:v$env:DRONE_SEMVER_SHORT-windows-1903-amd64 .
+      docker push plugins/gcs:v$env:DRONE_SEMVER_SHORT-windows-1903-amd64 .
+    } else {
+      docker build -f docker/Dockerfile.windows.1903 -t plugins/gcs:windows-1903-amd64 .
+      docker push plugins/gcs:windows-1903-amd64
+    }
   environment:
     CGO_ENABLED: "0"
     USERNAME:
@@ -365,7 +376,6 @@ steps:
 trigger:
   event:
   - push
-  - pull_request
 
 depends_on:
 - testing
@@ -407,5 +417,7 @@ depends_on:
 - linux-amd64
 - linux-arm64
 - linux-arm
+- windows-1809-amd64
+- windows-1903-amd64
 
 ...
