@@ -314,7 +314,7 @@ steps:
   - |
     if (Test-Path env:DRONE_SEMVER_SHORT) {
       docker build -f docker/Dockerfile.windows.1809 -t plugins/gcs:$env:DRONE_SEMVER_SHORT-windows-1809-amd64 .
-      docker push plugins/gcs:v$env:DRONE_SEMVER_SHORT-windows-1809-amd64 .
+      docker push plugins/gcs:v$env:DRONE_SEMVER_SHORT-windows-1809-amd64
     } else {
       docker build -f docker/Dockerfile.windows.1809 -t plugins/gcs:windows-1809-amd64 .
       docker push plugins/gcs:windows-1809-amd64
@@ -358,7 +358,7 @@ steps:
   - |
     if (Test-Path env:DRONE_SEMVER_SHORT) {
       docker build -f docker/Dockerfile.windows.1903 -t plugins/gcs:$env:DRONE_SEMVER_SHORT-windows-1903-amd64 .
-      docker push plugins/gcs:v$env:DRONE_SEMVER_SHORT-windows-1903-amd64 .
+      docker push plugins/gcs:v$env:DRONE_SEMVER_SHORT-windows-1903-amd64
     } else {
       docker build -f docker/Dockerfile.windows.1903 -t plugins/gcs:windows-1903-amd64 .
       docker push plugins/gcs:windows-1903-amd64
