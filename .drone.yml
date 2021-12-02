@@ -9,7 +9,7 @@ platform:
 steps:
 - name: vet
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - go vet ./...
   environment:
@@ -20,7 +20,7 @@ steps:
 
 - name: test
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - go test -cover ./...
   environment:
@@ -50,7 +50,7 @@ platform:
 steps:
 - name: build-push
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_COMMIT_SHA:0:8}\" -a -tags netgo -o release/linux/amd64/drone-gcs"
   environment:
@@ -63,7 +63,7 @@ steps:
 
 - name: build-tag
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_TAG##v}\" -a -tags netgo -o release/linux/amd64/drone-gcs"
   environment:
@@ -75,7 +75,7 @@ steps:
 
 - name: executable
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - ./release/linux/amd64/drone-gcs --help
 
@@ -134,7 +134,7 @@ platform:
 steps:
 - name: build-push
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_COMMIT_SHA:0:8}\" -a -tags netgo -o release/linux/arm64/drone-gcs"
   environment:
@@ -147,7 +147,7 @@ steps:
 
 - name: build-tag
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_TAG##v}\" -a -tags netgo -o release/linux/arm64/drone-gcs"
   environment:
@@ -159,7 +159,7 @@ steps:
 
 - name: executable
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - ./release/linux/arm64/drone-gcs --help
 
@@ -218,7 +218,7 @@ platform:
 steps:
 - name: build-push
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_COMMIT_SHA:0:8}\" -a -tags netgo -o release/linux/arm/drone-gcs"
   environment:
@@ -231,7 +231,7 @@ steps:
 
 - name: build-tag
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_TAG##v}\" -a -tags netgo -o release/linux/arm/drone-gcs"
   environment:
@@ -243,7 +243,7 @@ steps:
 
 - name: executable
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - ./release/linux/arm/drone-gcs --help
 
@@ -309,8 +309,6 @@ server:
 steps:
 - name: build
   commands:
-  # TODO use the new DRONE_SEMVER_SHORT environment variables to
-  # publish docker images for tag events.
   - go build -o release/windows/amd64/drone-gcs.exe
   - docker login -u $env:USERNAME -p $env:PASSWORD
   - |
@@ -353,8 +351,6 @@ server:
 steps:
 - name: build
   commands:
-  # TODO use the new DRONE_SEMVER_SHORT environment variables to
-  # publish docker images for tag events.
   - echo $env:DRONE_SEMVER_SHORT
   - go build -o release/windows/amd64/drone-gcs.exe
   - docker login -u $env:USERNAME -p $env:PASSWORD
