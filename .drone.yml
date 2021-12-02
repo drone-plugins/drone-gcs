@@ -9,7 +9,7 @@ platform:
 steps:
 - name: vet
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - go vet ./...
   environment:
@@ -20,7 +20,7 @@ steps:
 
 - name: test
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - go test -cover ./...
   environment:
@@ -50,7 +50,7 @@ platform:
 steps:
 - name: build-push
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_COMMIT_SHA:0:8}\" -a -tags netgo -o release/linux/amd64/drone-gcs"
   environment:
@@ -63,7 +63,7 @@ steps:
 
 - name: build-tag
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_TAG##v}\" -a -tags netgo -o release/linux/amd64/drone-gcs"
   environment:
@@ -75,7 +75,7 @@ steps:
 
 - name: executable
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - ./release/linux/amd64/drone-gcs --help
 
@@ -134,7 +134,7 @@ platform:
 steps:
 - name: build-push
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_COMMIT_SHA:0:8}\" -a -tags netgo -o release/linux/arm64/drone-gcs"
   environment:
@@ -147,7 +147,7 @@ steps:
 
 - name: build-tag
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_TAG##v}\" -a -tags netgo -o release/linux/arm64/drone-gcs"
   environment:
@@ -159,7 +159,7 @@ steps:
 
 - name: executable
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - ./release/linux/arm64/drone-gcs --help
 
@@ -218,7 +218,7 @@ platform:
 steps:
 - name: build-push
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_COMMIT_SHA:0:8}\" -a -tags netgo -o release/linux/arm/drone-gcs"
   environment:
@@ -231,7 +231,7 @@ steps:
 
 - name: build-tag
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - "go build -v -ldflags \"-X main.version=${DRONE_TAG##v}\" -a -tags netgo -o release/linux/arm/drone-gcs"
   environment:
@@ -243,7 +243,7 @@ steps:
 
 - name: executable
   pull: always
-  image: golang:1.11
+  image: golang:1.17.3
   commands:
   - ./release/linux/arm/drone-gcs --help
 
@@ -293,6 +293,93 @@ depends_on:
 
 ---
 kind: pipeline
+type: ssh
+name: windows-1809-amd64
+
+platform:
+  os: windows
+
+server:
+  host: windows.1809.amd64.plugins.drone.ci
+  password:
+    from_secret: windows_password
+  user:
+    from_secret: windows_username
+
+steps:
+- name: build
+  commands:
+  - go build -o release/windows/amd64/drone-gcs.exe
+  - docker login -u $env:USERNAME -p $env:PASSWORD
+  - |
+    if (Test-Path env:DRONE_SEMVER_SHORT) {
+      docker build -f docker/Dockerfile.windows.1809 -t plugins/gcs:$env:DRONE_SEMVER_SHORT-windows-1809-amd64 .
+      docker push plugins/gcs:$env:DRONE_SEMVER_SHORT-windows-1809-amd64
+    } else {
+      docker build -f docker/Dockerfile.windows.1809 -t plugins/gcs:windows-1809-amd64 .
+      docker push plugins/gcs:windows-1809-amd64
+    }
+  environment:
+    CGO_ENABLED: "0"
+    USERNAME:
+      from_secret: docker_username
+    PASSWORD:
+      from_secret: docker_password
+
+trigger:
+  event:
+  - push
+  - tag
+
+depends_on:
+- testing
+
+---
+kind: pipeline
+type: ssh
+name: windows-1903-amd64
+
+platform:
+  os: windows
+
+server:
+  host: windows.1903.amd64.plugins.drone.ci
+  password:
+    from_secret: windows_password
+  user:
+    from_secret: windows_username
+
+steps:
+- name: build
+  commands:
+  - echo $env:DRONE_SEMVER_SHORT
+  - go build -o release/windows/amd64/drone-gcs.exe
+  - docker login -u $env:USERNAME -p $env:PASSWORD
+  - |
+    if (Test-Path env:DRONE_SEMVER_SHORT) {
+      docker build -f docker/Dockerfile.windows.1903 -t plugins/gcs:$env:DRONE_SEMVER_SHORT-windows-1903-amd64 .
+      docker push plugins/gcs:$env:DRONE_SEMVER_SHORT-windows-1903-amd64
+    } else {
+      docker build -f docker/Dockerfile.windows.1903 -t plugins/gcs:windows-1903-amd64 .
+      docker push plugins/gcs:windows-1903-amd64
+    }
+  environment:
+    CGO_ENABLED: "0"
+    USERNAME:
+      from_secret: docker_username
+    PASSWORD:
+      from_secret: docker_password
+
+trigger:
+  event:
+  - push
+  - tag
+
+depends_on:
+- testing
+
+---
+kind: pipeline
 name: notifications
 
 platform:
@@ -328,5 +415,7 @@ depends_on:
 - linux-amd64
 - linux-arm64
 - linux-arm
+- windows-1809-amd64
+- windows-1903-amd64
 
 ...
