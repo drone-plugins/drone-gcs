@@ -19,7 +19,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -52,7 +52,7 @@ func gunzip(t *testing.T, bz []byte) []byte {
 		return bz
 	}
 	defer r.Close()
-	b, err := ioutil.ReadAll(r)
+	b, err := io.ReadAll(r)
 	if err != nil {
 		t.Errorf("gunzip read: %v", err)
 		return bz
@@ -69,13 +69,13 @@ func mkdirs(t *testing.T, path ...string) {
 
 func writeFile(t *testing.T, dir, name string, b []byte) {
 	p := filepath.Join(dir, name)
-	if err := ioutil.WriteFile(p, b, 0644); err != nil {
+	if err := os.WriteFile(p, b, 0644); err != nil {
 		t.Fatalf("WriteFile(%q): %v", p, err)
 	}
 }
 
 func TestUploadFile(t *testing.T) {
-	wdir, err := ioutil.TempDir("", "drone-gcs-test")
+	wdir, err := os.MkdirTemp("", "drone-gcs-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,29 +83,29 @@ func TestUploadFile(t *testing.T) {
 	plugin.Config.Source = wdir
 
 	tests := []struct {
+		name                 string
 		retries, failOnRetry int
-		ok                   bool
+		expectOk             bool
 	}{
-		{0, 1, true},
-		{3, 4, true},
-		{2, 1, false},
+		{"zero retries, fail on 1. ok", 0, 1, true},
+		{"2 retries, fail on 1. NOT ok", 2, 1, false},
 	}
 	for i, test := range tests {
-		var n int
+		var numberOfRetries int
 
 		rt := &fakeTransport{func(r *http.Request) (*http.Response, error) {
 			_, mp, _ := mime.ParseMediaType(r.Header.Get("content-type"))
 			mr := multipart.NewReader(r.Body, mp["boundary"])
-			mr.NextPart() // skip metadata
+			_, _ = mr.NextPart() // skip metadata
 			p, _ := mr.NextPart()
-			b, _ := ioutil.ReadAll(p)
+			b, _ := io.ReadAll(p)
 			// verify the body is always sent with correct content
 			if v := string(b); v != "test" {
-				t.Errorf("%d/%d: b = %q; want 'test'", i, n, b)
+				t.Errorf("%d/%d: b = %q; want 'test'", i, numberOfRetries, b)
 			}
 
 			res := &http.Response{
-				Body:       ioutil.NopCloser(strings.NewReader(`{"name": "fake"}`)),
+				Body:       io.NopCloser(strings.NewReader(`{"name": "fake"}`)),
 				Proto:      "HTTP/1.0",
 				ProtoMajor: 1,
 				ProtoMinor: 0,
@@ -115,15 +115,15 @@ func TestUploadFile(t *testing.T) {
 			// The storage.Client does not retry on 404s
 			// https://godoc.org/cloud.google.com/go/storage
 			// https://cloud.google.com/storage/docs/exponential-backoff
-			if n >= test.failOnRetry {
+			if numberOfRetries >= test.failOnRetry {
 				res.StatusCode = http.StatusNotFound
 			}
 
-			if n >= test.retries {
+			if numberOfRetries >= test.retries {
 				res.StatusCode = http.StatusOK
 			}
 
-			n++
+			numberOfRetries++
 			return res, nil
 		}}
 		hc := &http.Client{Transport: rt}
@@ -133,16 +133,16 @@ func TestUploadFile(t *testing.T) {
 		err := plugin.uploadFile("file", filepath.Join(wdir, "file"))
 
 		switch {
-		case test.ok && err != nil:
-			t.Errorf("%d: %v", i, err)
-		case !test.ok && err == nil:
+		case test.expectOk && err != nil:
+			t.Errorf("'%s'%d: %v", test.name, i, err)
+		case !test.expectOk && err == nil:
 			t.Errorf("%d: wanted error", i)
 		}
 	}
 }
 
 func TestRun(t *testing.T) {
-	wdir, err := ioutil.TempDir("", "drone-gcs-test")
+	wdir, err := os.MkdirTemp("", "drone-gcs-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestRun(t *testing.T) {
 	plugin.Config.Gzip = []string{"js"}
 	plugin.Config.CacheControl = "public,max-age=10"
 	plugin.Config.Metadata = map[string]string{"x-foo": "bar"}
-	acls := []storage.ACLRule{storage.ACLRule{Entity: "allUsers", Role: "READER"}}
+	acls := []storage.ACLRule{{Entity: "allUsers", Role: "READER"}}
 	plugin.Config.ACL = []string{fmt.Sprintf("%s:%s", acls[0].Entity, acls[0].Role)}
 
 	var seenMu sync.Mutex // guards seen
@@ -178,7 +178,7 @@ func TestRun(t *testing.T) {
 
 	rt := &fakeTransport{func(r *http.Request) (resp *http.Response, e error) {
 		resp = &http.Response{
-			Body:       ioutil.NopCloser(strings.NewReader(`{"name": "fake"}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"name": "fake"}`)),
 			Proto:      "HTTP/1.0",
 			ProtoMajor: 1,
 			ProtoMinor: 0,
@@ -240,11 +240,11 @@ func TestRun(t *testing.T) {
 			t.Errorf("media NextPart: %v", err)
 			return
 		}
-		b, _ := ioutil.ReadAll(p)
+		b, _ := io.ReadAll(p)
 		if attrs.ContentEncoding == "gzip" {
 			b = gunzip(t, b)
 		}
-		if bytes.Compare(b, obj.body) != 0 {
+		if !bytes.Equal(b, obj.body) {
 			t.Errorf("media b = %q; want %q", b, obj.body)
 		}
 		return
@@ -255,7 +255,7 @@ func TestRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plugin.Exec(client)
+	_ = plugin.Exec(client)
 	for k := range files {
 		if _, ok := seen[k]; !ok {
 			t.Errorf("%s didn't get uploaded", k)

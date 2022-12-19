@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -121,7 +120,7 @@ func run(c *cli.Context) error {
 			return errors.Wrap(err, "failed to create temporary directory")
 		}
 
-		tmpfile, err := ioutil.TempFile("", "")
+		tmpfile, err := os.CreateTemp("", "")
 		if err != nil {
 			return errors.Wrap(err, "failed to create temporary file")
 		}
