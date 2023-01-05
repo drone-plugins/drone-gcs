@@ -1,8 +1,13 @@
 # escape=`
-FROM mcr.microsoft.com/windows/nanoserver:1903
+
+FROM mcr.microsoft.com/windows/servercore:ltsc2019 as core
+
+
+FROM plugins/base:windows-ltsc2022-amd64
 USER ContainerAdministrator
 
 ENV GODEBUG=netdns=go
+COPY --from=core /windows/system32/netapi32.dll /windows/system32/netapi32.dll
 
 LABEL maintainer="Drone.IO Community <drone-dev@googlegroups.com>" `
   org.label-schema.name="Drone GCS" `
