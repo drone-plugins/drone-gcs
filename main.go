@@ -131,7 +131,10 @@ func run(c *cli.Context) error {
 			return err
 		}
 	} else {
-		return errors.New("Either one of token or json key must be specified")
+		client, err = gcsClientApplicationDefaultCredentials()
+		if err != nil {
+			return err
+		}
 	}
 
 	return plugin.Exec(client)
@@ -150,6 +153,7 @@ func gcsClientWithToken(token string) (*storage.Client, error) {
 	}
 	return client, nil
 }
+
 func gcsClientWithJSONKey(jsonKey string, credFile *os.File) (*storage.Client, error) {
 	if _, err := credFile.Write([]byte(jsonKey)); err != nil {
 		return nil, errors.Wrap(err, "failed to write gcs credentials to file")
@@ -160,6 +164,15 @@ func gcsClientWithJSONKey(jsonKey string, credFile *os.File) (*storage.Client, e
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFile.Name()))
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize storage")
+	}
+	return client, nil
+}
+
+func gcsClientApplicationDefaultCredentials() (*storage.Client, error) {
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to initialize storage")
 	}
