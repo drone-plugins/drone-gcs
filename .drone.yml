@@ -20,6 +20,7 @@ steps:
         path: "/go"
   - name: test
     image: golang:1.20
+    pull: always
     commands:
       - go test -cover ./...
     volumes:
