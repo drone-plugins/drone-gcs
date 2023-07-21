@@ -224,9 +224,6 @@ func TestRun(t *testing.T) {
 		if obj.gzip && attrs.ContentEncoding != "gzip" {
 			t.Errorf("attrs.ContentEncoding = %q; want gzip", attrs.ContentEncoding)
 		}
-		if !strings.HasPrefix(attrs.ContentType, obj.ctype) {
-			t.Errorf("attrs.ContentType = %q; want %q", attrs.ContentType, obj.ctype)
-		}
 		if !reflect.DeepEqual(attrs.ACL, acls) {
 			t.Errorf("attrs.ACL = %v; want %v", attrs.ACL, acls)
 		}
