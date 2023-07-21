@@ -61,8 +61,7 @@ const maxConcurrent = 100
 // Exec executes the plugin
 func (p *Plugin) Exec(client *storage.Client) error {
 	sort.Strings(p.Config.Gzip)
-	rand.Seed(time.Now().UnixNano()) //nolint: staticcheck
-
+	rand.Seed(time.Now().UnixNano()) 
 	p.printf = log.Printf
 	p.fatalf = log.Fatalf
 
