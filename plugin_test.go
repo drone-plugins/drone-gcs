@@ -160,7 +160,7 @@ func TestRun(t *testing.T) {
 		gzip  bool
 	}{
 		"dir/file.txt":     {"text/plain", []byte("text"), false},
-		"dir/file.js":      {"application/javascript", []byte("javascript"), true},
+		"dir/file.js":      {"text/javascript", []byte("javascript"), true},
 		"dir/sub/file.css": {"text/css", []byte("sub style"), false},
 	}
 
@@ -223,6 +223,9 @@ func TestRun(t *testing.T) {
 		}
 		if obj.gzip && attrs.ContentEncoding != "gzip" {
 			t.Errorf("attrs.ContentEncoding = %q; want gzip", attrs.ContentEncoding)
+		}
+		if !strings.HasPrefix(attrs.ContentType, obj.ctype) {
+			t.Errorf("attrs.ContentType = %q; want %q", attrs.ContentType, obj.ctype)
 		}
 		if !reflect.DeepEqual(attrs.ACL, acls) {
 			t.Errorf("attrs.ACL = %v; want %v", attrs.ACL, acls)
