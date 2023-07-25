@@ -160,7 +160,7 @@ func TestRun(t *testing.T) {
 		gzip  bool
 	}{
 		"dir/file.txt":     {"text/plain", []byte("text"), false},
-		"dir/file.js":      {"application/javascript", []byte("javascript"), true},
+		"dir/file.js":      {"text/javascript", []byte("javascript"), true},
 		"dir/sub/file.css": {"text/css", []byte("sub style"), false},
 	}
 
