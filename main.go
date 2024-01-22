@@ -54,6 +54,11 @@ func main() {
 			Usage:  "destination to copy files to, including bucket name",
 			EnvVar: "PLUGIN_TARGET",
 		},
+		cli.BoolFlag{
+			Name:   "download",
+			Usage:  "switch to download mode, which will fetch `target`'s files from GCS",
+			EnvVar: "PLUGIN_DOWNLOAD",
+		},
 		cli.StringSliceFlag{
 			Name:   "gzip",
 			Usage:  `files with the specified extensions will be gzipped and uploaded with "gzip" Content-Encoding header`,
@@ -83,6 +88,7 @@ func run(c *cli.Context) error {
 			ACL:          c.StringSlice("acl"),
 			Source:       c.String("source"),
 			Target:       c.String("target"),
+			Download:     c.Bool("download"),
 			Ignore:       c.String("ignore"),
 			Gzip:         c.StringSlice("gzip"),
 			CacheControl: c.String("cache-control"),
@@ -99,8 +105,10 @@ func run(c *cli.Context) error {
 		plugin.Config.Metadata = metadata
 	}
 
-	if plugin.Config.Source == "" {
-		return errors.New("Missing source")
+	if plugin.Config.Download == false {
+		if plugin.Config.Source == "" {
+			return errors.New("Missing source")
+		}
 	}
 
 	if plugin.Config.Target == "" {
