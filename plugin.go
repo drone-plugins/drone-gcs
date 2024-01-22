@@ -110,8 +110,10 @@ func (p *Plugin) Exec(client *storage.Client) error {
 			destination := filepath.Join(p.Config.Source, objAttrs.Name)
 			log.Println("Destination: ", destination)
 
-			// Extract the directory from the destination path
-			dir := filepath.Dir(destination)
+			// // Extract the directory from the destination path
+			// dir := filepath.Dir(destination)
+
+			dir := extractDir(destination)
 
 			// Create the directory and any necessary parent directories
 			if err := os.MkdirAll(dir, os.ModePerm); err != nil {
@@ -346,4 +348,9 @@ func (p *Plugin) walkFiles() ([]string, error) {
 	})
 
 	return items, err
+}
+
+func extractDir(destination string) string {
+	// Extract the directory from the destination path
+	return filepath.Dir(destination)
 }

@@ -262,3 +262,38 @@ func TestRun(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractDir(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			input:    "/path/to/file.txt",
+			expected: "/path/to",
+		},
+		{
+			input:    "relative/path/to/file",
+			expected: "relative/path/to",
+		},
+		{
+			input:    "file.txt",
+			expected: ".",
+		},
+		{
+			input:    "/root/directory/",
+			expected: "/root/directory",
+		},
+		{
+			input:    "C:/Program Files/Application",
+			expected: "C:/Program Files",
+		},
+	}
+
+	for _, tc := range tests {
+		result := extractDir(tc.input)
+		if result != tc.expected {
+			t.Errorf("Expected: %s, Got: %s", tc.expected, result)
+		}
+	}
+}
