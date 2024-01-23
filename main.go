@@ -106,13 +106,13 @@ func run(c *cli.Context) error {
 	}
 
 	if plugin.Config.Download == false {
-		if plugin.Config.Source == "" {
-			return errors.New("Missing source")
+		if plugin.Config.Target == "" {
+			return errors.New("Missing target")
 		}
 	}
 
-	if plugin.Config.Target == "" {
-		return errors.New("Missing target")
+	if plugin.Config.Source == "" {
+		return errors.New("Missing source")
 	}
 
 	var client *storage.Client

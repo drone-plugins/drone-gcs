@@ -85,10 +85,15 @@ func (p *Plugin) Exec(client *storage.Client) error {
 
 	// If in download mode, call the Download method
 	if p.Config.Download {
+		bname, remainingPath := extractBucketName(p.Config.Source)
+		p.Config.Source = remainingPath
+
+		p.bucket = client.Bucket(strings.Trim(bname, "/"))
+
 		log.Println("Downloading objects ...")
 
 		ctx := context.Background()
-		query := &storage.Query{Prefix: p.Config.Target}
+		query := &storage.Query{Prefix: p.Config.Source}
 
 		// List the objects in the specified GCS bucket path
 		it := p.bucket.Objects(ctx, query)
@@ -107,7 +112,7 @@ func (p *Plugin) Exec(client *storage.Client) error {
 			}
 
 			// Create the destination file path
-			destination := filepath.Join(p.Config.Source, objAttrs.Name)
+			destination := filepath.Join(p.Config.Target, objAttrs.Name)
 			log.Println("Destination: ", destination)
 
 			// // Extract the directory from the destination path
@@ -353,4 +358,13 @@ func (p *Plugin) walkFiles() ([]string, error) {
 func extractDir(destination string) string {
 	// Extract the directory from the destination path
 	return filepath.Dir(destination)
+}
+
+// extractBucketName extracts the bucket name from the target path.
+func extractBucketName(source string) (string, string) {
+	src := strings.SplitN(source, "/", 2)
+	if len(src) == 1 {
+		return src[0], ""
+	}
+	return src[0], src[1]
 }
