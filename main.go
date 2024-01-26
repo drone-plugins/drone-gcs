@@ -105,7 +105,7 @@ func run(c *cli.Context) error {
 		plugin.Config.Metadata = metadata
 	}
 
-	if plugin.Config.Download == false {
+	if !plugin.Config.Download {
 		if plugin.Config.Target == "" {
 			return errors.New("Missing target")
 		}
