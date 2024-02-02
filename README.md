@@ -36,8 +36,8 @@ docker build \
 
 ### Usage
 
+* For upload
 ```console
-// For upload
 docker run --rm \
   -e PLUGIN_SOURCE="dist" \
   -e PLUGIN_TARGET="bucket/dir/" \
@@ -49,8 +49,10 @@ docker run --rm \
   -v $(pwd):$(pwd) \
   -w $(pwd) \
   plugins/gcs
+```
 
-  // For download
+* For download
+```console
 docker run --rm \
   -e PLUGIN_TOKEN="<YOUR_GCP_SERVICE_ACCOUNT_TOKEN>" \
   -e PLUGIN_SOURCE="bucket/dir/" \
