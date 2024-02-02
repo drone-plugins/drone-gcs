@@ -18,7 +18,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
 )
 
@@ -98,8 +97,6 @@ func (p *Plugin) Exec(client *storage.Client) error {
 		// List the objects in the specified GCS bucket path
 		it := p.bucket.Objects(ctx, query)
 
-		g := errgroup.Group{}
-
 		for {
 			objAttrs, err := it.Next()
 
@@ -118,7 +115,7 @@ func (p *Plugin) Exec(client *storage.Client) error {
 			// // Extract the directory from the destination path
 			// dir := filepath.Dir(destination)
 
-			dir := extractDir(destination)
+			dir := filepath.Dir(destination)
 
 			// Create the directory and any necessary parent directories
 			if err := os.MkdirAll(dir, os.ModePerm); err != nil {
@@ -144,10 +141,9 @@ func (p *Plugin) Exec(client *storage.Client) error {
 			if err != nil {
 				return errors.Wrap(err, "error copying GCS object contents to local file")
 			}
-
 		}
 
-		return g.Wait()
+		return nil
 	}
 
 	// create a list of files to upload
@@ -353,11 +349,6 @@ func (p *Plugin) walkFiles() ([]string, error) {
 	})
 
 	return items, err
-}
-
-func extractDir(destination string) string {
-	// Extract the directory from the destination path
-	return filepath.Dir(destination)
 }
 
 // extractBucketName extracts the bucket name from the target path.
