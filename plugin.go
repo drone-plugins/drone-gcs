@@ -18,6 +18,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/pkg/errors"
+	"google.golang.org/api/iterator"
 )
 
 type (
@@ -32,6 +33,9 @@ type (
 
 		// Destination to copy files to, including bucket name
 		Target string
+
+		// if true, plugin is set to download mode, which means `source` from the bucket will be downloaded
+		Download bool
 
 		// Exclude files matching this pattern.
 		Ignore string
@@ -77,6 +81,21 @@ func (p *Plugin) Exec(client *storage.Client) error {
 	}
 
 	p.bucket = client.Bucket(strings.Trim(bname, "/"))
+
+	// If in download mode, call the Download method
+	if p.Config.Download {
+		bname, remainingPath := extractBucketName(p.Config.Source)
+		p.Config.Source = remainingPath
+
+		p.bucket = client.Bucket(strings.Trim(bname, "/"))
+
+		log.Println("Downloading objects from bucket: ", bname, " using path: ", remainingPath)
+
+		ctx := context.Background()
+		query := &storage.Query{Prefix: p.Config.Source}
+
+		return p.downloadObjects(ctx, query)
+	}
 
 	// create a list of files to upload
 	if !strings.HasPrefix(p.Config.Source, "/") {
@@ -281,4 +300,74 @@ func (p *Plugin) walkFiles() ([]string, error) {
 	})
 
 	return items, err
+}
+
+// extractBucketName extracts the bucket name from the target path.
+func extractBucketName(source string) (string, string) {
+	src := strings.SplitN(source, "/", 2)
+	if len(src) == 1 {
+		return src[0], ""
+	}
+	return src[0], src[1]
+}
+
+// downloadObject downloads a single object from GCS
+func (p *Plugin) downloadObject(ctx context.Context, objAttrs *storage.ObjectAttrs) error {
+	// Create the destination file path
+	destination := filepath.Join(p.Config.Target, objAttrs.Name)
+	log.Println("Destination: ", destination)
+
+	// Extract the directory from the destination path
+	dir := filepath.Dir(destination)
+
+	// Create the directory and any necessary parent directories
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return errors.Wrap(err, "error creating directories")
+	}
+
+	// Create a file to write the downloaded object
+	file, err := os.Create(destination)
+	if err != nil {
+		return errors.Wrap(err, "error creating destination file")
+	}
+	defer file.Close()
+
+	// Open the GCS object for reading
+	reader, err := p.bucket.Object(objAttrs.Name).NewReader(ctx)
+	if err != nil {
+		return errors.Wrap(err, "error opening GCS object for reading")
+	}
+	defer reader.Close()
+
+	// Copy the contents of the GCS object to the local file
+	_, err = io.Copy(file, reader)
+	if err != nil {
+		return errors.Wrap(err, "error copying GCS object contents to local file")
+	}
+
+	return nil
+}
+
+// downloadObjects downloads all objects in the specified GCS bucket path
+func (p *Plugin) downloadObjects(ctx context.Context, query *storage.Query) error {
+	// List the objects in the specified GCS bucket path
+	it := p.bucket.Objects(ctx, query)
+
+	for {
+		objAttrs, err := it.Next()
+
+		if err == iterator.Done {
+			break
+		}
+
+		if err != nil {
+			return errors.Wrap(err, "error while iterating through GCS objects")
+		}
+
+		if err := p.downloadObject(ctx, objAttrs); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

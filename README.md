@@ -36,6 +36,7 @@ docker build \
 
 ### Usage
 
+* For upload
 ```console
 docker run --rm \
   -e PLUGIN_SOURCE="dist" \
@@ -45,6 +46,17 @@ docker run --rm \
   -e PLUGIN_GZIP="js,css,html" \
   -e PLUGIN_CACHE_CONTROL="public,max-age=3600" \
   -e PLUGIN_METADATA='{"x-goog-meta-foo":"bar"}' \
+  -v $(pwd):$(pwd) \
+  -w $(pwd) \
+  plugins/gcs
+```
+
+* For download
+```console
+docker run --rm \
+  -e PLUGIN_TOKEN="<YOUR_GCP_SERVICE_ACCOUNT_TOKEN>" \
+  -e PLUGIN_SOURCE="bucket/dir/" \
+  -e PLUGIN_DOWNLOAD="true" \
   -v $(pwd):$(pwd) \
   -w $(pwd) \
   plugins/gcs

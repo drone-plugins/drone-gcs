@@ -262,3 +262,49 @@ func TestRun(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractBucketName(t *testing.T) {
+	tests := []struct {
+		input        string
+		expectedName string
+		expectedPath string
+	}{
+		{
+			input:        "bucket-name/object/file.txt",
+			expectedName: "bucket-name",
+			expectedPath: "object/file.txt",
+		},
+		{
+			input:        "only-bucket",
+			expectedName: "only-bucket",
+			expectedPath: "",
+		},
+		{
+			input:        "nested/bucket/path/to/object",
+			expectedName: "nested",
+			expectedPath: "bucket/path/to/object",
+		},
+		{
+			input:        "root/bucket/",
+			expectedName: "root",
+			expectedPath: "bucket/",
+		},
+		{
+			input:        "object/file.jpg",
+			expectedName: "object",
+			expectedPath: "file.jpg",
+		},
+		{
+			input:        "no-slash",
+			expectedName: "no-slash",
+			expectedPath: "",
+		},
+	}
+
+	for _, tc := range tests {
+		name, path := extractBucketName(tc.input)
+		if name != tc.expectedName || path != tc.expectedPath {
+			t.Errorf("Expected: %s, %s; Got: %s, %s", tc.expectedName, tc.expectedPath, name, path)
+		}
+	}
+}
