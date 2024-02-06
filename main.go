@@ -56,7 +56,7 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:   "download",
-			Usage:  "switch to download mode, which will fetch `target`'s files from GCS",
+			Usage:  "switch to download mode, which will fetch `source`'s files from GCS",
 			EnvVar: "PLUGIN_DOWNLOAD",
 		},
 		cli.StringSliceFlag{

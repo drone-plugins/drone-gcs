@@ -34,7 +34,7 @@ type (
 		// Destination to copy files to, including bucket name
 		Target string
 
-		// if true, plugin is set to download mode, which means `target` from the bucket will be downloaded
+		// if true, plugin is set to download mode, which means `source` from the bucket will be downloaded
 		Download bool
 
 		// Exclude files matching this pattern.
@@ -89,7 +89,7 @@ func (p *Plugin) Exec(client *storage.Client) error {
 
 		p.bucket = client.Bucket(strings.Trim(bname, "/"))
 
-		log.Println("Downloading objects ...")
+		log.Println("Downloading objects from bucket: ", bname, " using path: ", remainingPath)
 
 		ctx := context.Background()
 		query := &storage.Query{Prefix: p.Config.Source}
