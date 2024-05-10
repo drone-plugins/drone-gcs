@@ -10,6 +10,12 @@
 
 Drone plugin to publish files and artifacts to Google Cloud Storage. For the usage information and a listing of the available options please take a look at [the docs](http://plugins.drone.io/drone-plugins/drone-gcs/).
 
+Run the following script to install git-leaks support to this repo.
+```
+chmod +x ./git-hooks/install.sh
+./git-hooks/install.sh
+```
+
 ## Build
 
 Build the binary with the following command:
