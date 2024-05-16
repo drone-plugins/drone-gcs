@@ -127,25 +127,25 @@ func run(c *cli.Context) error {
 		},
 	}
 
-	// if m := c.String("metadata"); m != "" {
-	// 	var metadata map[string]string
+	if m := c.String("metadata"); m != "" {
+		var metadata map[string]string
 
-	// 	if err := json.Unmarshal([]byte(m), &metadata); err != nil {
-	// 		return errors.Wrap(err, "error parsing metadata field")
-	// 	}
+		if err := json.Unmarshal([]byte(m), &metadata); err != nil {
+			return errors.Wrap(err, "error parsing metadata field")
+		}
 
-	// 	plugin.Config.Metadata = metadata
-	// }
+		plugin.Config.Metadata = metadata
+	}
 
-	// if !plugin.Config.Download {
-	// 	if plugin.Config.Target == "" {
-	// 		return errors.New("Missing target")
-	// 	}
-	// }
+	if !plugin.Config.Download {
+		if plugin.Config.Target == "" {
+			return errors.New("Missing target")
+		}
+	}
 
-	// if plugin.Config.Source == "" {
-	// 	return errors.New("Missing source")
-	// }
+	if plugin.Config.Source == "" {
+		return errors.New("Missing source")
+	}
 
 	var client *storage.Client
 	var err error
