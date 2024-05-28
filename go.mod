@@ -5,6 +5,7 @@ go 1.22
 require (
 	cloud.google.com/go/storage v1.31.0
 	github.com/pkg/errors v0.9.1
+	github.com/sirupsen/logrus v1.9.3
 	github.com/urfave/cli v1.22.14
 	golang.org/x/net v0.12.0
 	golang.org/x/oauth2 v0.10.0

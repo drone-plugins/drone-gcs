@@ -10,6 +10,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/drone-plugins/drone-gcs/internal/gcp"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -227,9 +228,13 @@ func gcsClientApplicationDefaultCredentials() (*storage.Client, error) {
 
 func gcsClientWithOIDC(workloadPoolId string, providerId string, gcpProjectId string, serviceAccountEmail string, OidcIdToken string) (*storage.Client, error) {
 
-	oidcToken, err := gcp.GetFederalToken(OidcIdToken, gcpProjectId, workloadPoolId, providerId)
+	federalToken, err := gcp.GetFederalToken(OidcIdToken, gcpProjectId, workloadPoolId, providerId)
 	if err != nil {
 		return nil, fmt.Errorf("OIDC token retrieval failed: %w", err)
+	}
+	oidcToken, err := gcp.GetGoogleCloudAccessToken(federalToken, serviceAccountEmail)
+	if err != nil {
+		logrus.Fatalf("Error getting Google Cloud Access Token: %s", err)
 	}
 
 	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{
