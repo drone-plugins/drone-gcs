@@ -226,7 +226,6 @@ func gcsClientApplicationDefaultCredentials() (*storage.Client, error) {
 }
 
 func gcsClientWithOIDC(workloadPoolId string, providerId string, gcpProjectId string, serviceAccountEmail string, OidcIdToken string) (*storage.Client, error) {
-
 	federalToken, err := gcp.GetFederalToken(OidcIdToken, gcpProjectId, workloadPoolId, providerId)
 	if err != nil {
 		return nil, fmt.Errorf("OIDC token retrieval failed: %w", err)
@@ -235,7 +234,6 @@ func gcsClientWithOIDC(workloadPoolId string, providerId string, gcpProjectId st
 	if err != nil {
 		return nil, fmt.Errorf("error getting Google Cloud Access Token: %w", err)
 	}
-
 	tokenSource := oauth2.StaticTokenSource(&oauth2.Token{
 		AccessToken: oidcToken,
 		TokenType:   "Bearer",
