@@ -43,6 +43,13 @@ type (
 		Gzip         []string
 		CacheControl string
 		Metadata     map[string]string
+
+		// OIDC Config
+		workloadPoolId      string
+		providerId          string
+		gcpProjectId        string
+		serviceAccountEmail string
+		OidcIdToken         string
 	}
 
 	Plugin struct {
