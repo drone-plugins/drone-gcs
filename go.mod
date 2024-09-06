@@ -1,11 +1,11 @@
 module github.com/drone-plugins/drone-gcs
 
-go 1.22.4
+go 1.23.4
 
 require (
 	cloud.google.com/go/storage v1.31.0
 	github.com/pkg/errors v0.9.1
-	github.com/urfave/cli v1.22.14
+	github.com/urfave/cli v1.23.14
 	golang.org/x/net v0.12.0
 	golang.org/x/oauth2 v0.10.0
 	google.golang.org/api v0.132.0
@@ -13,7 +13,7 @@ require (
 
 require (
 	cloud.google.com/go v0.110.6 // indirect
-	cloud.google.com/go/compute v1.22.0 // indirect
+	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
