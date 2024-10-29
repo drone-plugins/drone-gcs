@@ -1,7 +1,7 @@
 FROM arm64v8/alpine:3.20 as alpine
 RUN apk add -U --no-cache ca-certificates
 
-FROM arm64v8/alpine:3.21
+FROM arm64v8/alpine:3.20
 
 LABEL maintainer="Drone.IO Community <drone-dev@googlegroups.com>" \
   org.label-schema.name="Drone GCS" \
