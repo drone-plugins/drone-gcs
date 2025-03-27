@@ -34,7 +34,7 @@ pipeline:
                   identifier: lint
                   spec:
                     connectorRef: Plugins_Docker_Hub_Connector
-                    image: golang:1.22.7
+                    image: golang:1.23.0
                     shell: Sh
                     command: |-
                       go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
