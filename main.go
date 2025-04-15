@@ -102,6 +102,11 @@ func main() {
 			Usage:  "OIDC GCP Token",
 			EnvVar: "PLUGIN_OIDC_TOKEN_ID",
 		},
+		cli.BoolFlag{
+			Name:   "enable-proxy",
+			Usage:  "sets the proxy urls to be honored by the plugin",
+			EnvVar: "PLUGIN_ENABLE_PROXY",
+		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
@@ -125,6 +130,7 @@ func run(c *cli.Context) error {
 			gcpProjectId:        c.String("oidc-project-number"),
 			serviceAccountEmail: c.String("oidc-service-account-email"),
 			OidcIdToken:         c.String("oidc-token-id"),
+			EnableProxy:         c.Bool("enable-proxy"),
 		},
 	}
 
