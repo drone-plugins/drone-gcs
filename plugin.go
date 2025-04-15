@@ -50,6 +50,7 @@ type (
 		gcpProjectId        string
 		serviceAccountEmail string
 		OidcIdToken         string
+		EnableProxy         bool
 	}
 
 	Plugin struct {
@@ -65,12 +66,24 @@ type (
 	}
 )
 
-// maxConcurrent is the highest upload concurrency.
-// It cannot be 0.
-const maxConcurrent = 100
+const (
+	maxConcurrent     = 100 // maxConcurrent is the highest upload concurrency. It cannot be 0.
+	harnessHTTPProxy  = "HARNESS_HTTP_PROXY"
+	harnessHTTPSProxy = "HARNESS_HTTPS_PROXY"
+	harnessNoProxy    = "HARNESS_NO_PROXY"
+	httpProxy         = "HTTP_PROXY"
+	httpsProxy        = "HTTPS_PROXY"
+	noProxy           = "NO_PROXY"
+)
 
 // Exec executes the plugin
 func (p *Plugin) Exec(client *storage.Client) error {
+
+	if p.Config.EnableProxy {
+		log.Printf("setting proxy config for upload")
+		setSecureConnectProxies()
+	}
+
 	sort.Strings(p.Config.Gzip)
 	rand.Seed(time.Now().UnixNano()) //nolint: staticcheck
 
@@ -377,4 +390,21 @@ func (p *Plugin) downloadObjects(ctx context.Context, query *storage.Query) erro
 	}
 
 	return nil
+}
+
+func setSecureConnectProxies() {
+	copyEnvVariableIfExists(harnessHTTPProxy, httpProxy)
+	copyEnvVariableIfExists(harnessHTTPSProxy, httpsProxy)
+	copyEnvVariableIfExists(harnessNoProxy, noProxy)
+}
+
+func copyEnvVariableIfExists(src string, dest string) {
+	srcValue := os.Getenv(src)
+	if srcValue == "" {
+		return
+	}
+	err := os.Setenv(dest, srcValue)
+	if err != nil {
+		log.Printf("Failed to copy env variable from %s to %s with error %v", src, dest, err)
+	}
 }
