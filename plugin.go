@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/mattn/go-zglob"
 	"github.com/pkg/errors"
 	"google.golang.org/api/iterator"
 )
@@ -129,12 +130,53 @@ func (p *Plugin) Exec(client *storage.Client) error {
 		p.Config.Source = filepath.Join(pwd, p.Config.Source)
 	}
 
+	// Find files using glob pattern match
 	src, err := p.walkFiles()
 
 	if err != nil {
 		p.fatalf("local files: %v", err)
 	}
+	
+	// Check if we found any files
+	if len(src) == 0 {
+		p.printf("No files matched the pattern: %s", p.Config.Source)
+		return nil  // Not an error, just nothing to do
+	}
+	
+	// Log how many files matched the pattern
+	p.printf("Pattern %s matched %d files", p.Config.Source, len(src))
 
+	// result contains upload result of a single file
+	type result struct {
+		name string
+		err  error
+	}
+
+	// Process files in chunks if there are many
+	return p.processFiles(src)
+}
+
+// processFiles handles files in chunks to manage memory usage for large file sets
+func (p *Plugin) processFiles(files []string) error {
+	const chunkSize = 500
+	
+	for i := 0; i < len(files); i += chunkSize {
+		end := i + chunkSize
+		if end > len(files) {
+			end = len(files)
+		}
+		
+		chunk := files[i:end]
+		if err := p.uploadChunk(chunk); err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
+// uploadChunk uploads a subset of files
+func (p *Plugin) uploadChunk(src []string) error {
 	// result contains upload result of a single file
 	type result struct {
 		name string
@@ -286,40 +328,142 @@ func (p *Plugin) matchGzip(file string) bool {
 }
 
 // walkFiles creates a complete set of files to upload
-// by walking p.Source recursively.
-//
-// It excludes files matching p.Ignore pattern.
-// The ignore pattern is matched using filepath.Match against a partial
-// file name, relative to p.Source.
+// using glob pattern matching for the source path.
+// 
+// It handles glob patterns in the p.Source path and excludes files matching p.Ignore pattern.
 func (p *Plugin) walkFiles() ([]string, error) {
+	// Store original source for later use
+	originalSource := p.Config.Source
+	
+	// Convert Windows paths to forward slashes if needed
+	p.Config.Source = filepath.ToSlash(p.Config.Source)
+	
+	// Get matching files using glob pattern
+	files, err := matches(p.Config.Source, p.Config.Ignore)
+	
+	// Restore original source value
+	p.Config.Source = originalSource
+	
+	if err != nil {
+		return nil, err
+	}
+	
+	// Filter out directories and check permissions
 	var items []string
-
-	err := filepath.Walk(p.Config.Source, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
-			return err
-		}
-
-		rel, err := filepath.Rel(p.Config.Source, path)
-
+	for _, file := range files {
+		info, err := os.Stat(file)
 		if err != nil {
-			return err
+			if os.IsPermission(err) {
+				// Log permission errors but continue with other files
+				p.errorf("permission denied: %s", file)
+				continue
+			}
+			return nil, err
+		}
+		
+		if !info.IsDir() {
+			// Verify file is readable before adding to upload list
+			if f, err := os.Open(file); err == nil {
+				f.Close()
+				items = append(items, file)
+			} else if os.IsPermission(err) {
+				p.errorf("permission denied: %s", file)
+			} else {
+				return nil, err
+			}
+		}
+	}
+	
+	return items, nil
+}
+
+// matches returns a list of files that match the glob pattern while respecting exclusion patterns
+func matches(include string, exclude string) ([]string, error) {
+	// Check if the include path is a direct path without glob characters
+	// This ensures backward compatibility
+	if !containsGlobCharacters(include) {
+		// Check if the path exists
+		info, err := os.Stat(include)
+		if err != nil {
+			return nil, err
 		}
 
-		var ignore bool
-
-		if p.Config.Ignore != "" {
-			ignore, err = filepath.Match(p.Config.Ignore, rel)
+		// If it's a regular file, just return it
+		if !info.IsDir() {
+			return []string{include}, nil
 		}
+		
+		// If it's a directory, walk it recursively
+		var files []string
+		err = filepath.Walk(include, func(path string, fi os.FileInfo, err error) error {
+			if err != nil || fi.IsDir() {
+				return err
+			}
 
-		if err != nil || ignore {
-			return err
+			// Check if the file should be excluded
+			if exclude != "" {
+				rel, err := filepath.Rel(include, path)
+				if err != nil {
+					return err
+				}
+				
+				match, err := filepath.Match(exclude, rel)
+				if err != nil || match {
+					return err
+				}
+			}
+			
+			files = append(files, path)
+			return nil
+		})
+		
+		return files, err
+	}
+
+	// Handle path separators consistently
+	normalizedInclude := filepath.ToSlash(include)
+	
+	// Use zglob for pattern matching
+	matches, err := zglob.Glob(normalizedInclude)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Empty results check - not an error, just return empty slice
+	if len(matches) == 0 {
+		return []string{}, nil
+	}
+
+	// Handle exclusions if specified
+	if exclude == "" {
+		return matches, nil
+	}
+	
+	excludeMatches, err := filepath.Glob(exclude)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map of excluded files for faster lookup
+	excludeMap := make(map[string]struct{}, len(excludeMatches))
+	for _, f := range excludeMatches {
+		excludeMap[f] = struct{}{}
+	}
+
+	// Create a new slice without the excluded files
+	filtered := make([]string, 0, len(matches))
+	for _, f := range matches {
+		if _, excluded := excludeMap[f]; !excluded {
+			filtered = append(filtered, f)
 		}
+	}
 
-		items = append(items, path)
-		return nil
-	})
+	return filtered, nil
+}
 
-	return items, err
+// containsGlobCharacters checks if a path contains glob pattern characters
+func containsGlobCharacters(path string) bool {
+	return strings.ContainsAny(path, "*?[]{}")
 }
 
 // extractBucketName extracts the bucket name from the target path.

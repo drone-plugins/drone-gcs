@@ -10,6 +10,24 @@
 
 Drone plugin to publish files and artifacts to Google Cloud Storage. For the usage information and a listing of the available options please take a look at [the docs](http://plugins.drone.io/drone-plugins/drone-gcs/).
 
+## Glob Pattern Support
+
+The `source` parameter supports glob patterns for matching multiple files:
+
+### Basic Examples:
+
+- `*.txt` - Match all .txt files in the current directory
+- `**/*.go` - Match all .go files in any subdirectory recursively
+- `path/to/file[0-9].txt` - Match file0.txt through file9.txt in the path/to/ directory
+
+### Pattern Syntax:
+
+- `*` - matches any sequence of non-separator characters
+- `**` - matches any sequence of characters including separators
+- `?` - matches any single non-separator character
+- `[abc]` - matches any one character given in the bracket
+- `{foo,bar}` - matches either 'foo' or 'bar'
+
 Run the following script to install git-leaks support to this repo.
 ```
 chmod +x ./git-hooks/install.sh
