@@ -146,12 +146,6 @@ func (p *Plugin) Exec(client *storage.Client) error {
 	// Log how many files matched the pattern
 	p.printf("Pattern %s matched %d files", p.Config.Source, len(src))
 
-	// result contains upload result of a single file
-	type result struct {
-		name string
-		err  error
-	}
-
 	// Process files in chunks if there are many
 	return p.processFiles(src)
 }
