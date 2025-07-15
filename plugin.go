@@ -117,22 +117,27 @@ func (p *Plugin) Exec(client *storage.Client) error {
 		return p.downloadObjects(ctx, query)
 	}
 
-	// create a list of files to upload
-	if !strings.HasPrefix(p.Config.Source, "/") {
-		pwd, err := os.Getwd()
-
-		if err != nil {
-			return errors.Wrap(err, "failed to get working dir")
-		}
-
-		p.printf("source path relative to %s", pwd)
-		p.Config.Source = filepath.Join(pwd, p.Config.Source)
+	// create a list of files to upload using glob pattern expansion
+	p.printf("expanding source patterns: %s", p.Config.Source)
+	
+	// Expand glob patterns into actual source paths
+	expandedSources, err := p.expandGlobPatterns(p.Config.Source)
+	if err != nil {
+		return errors.Wrap(err, "failed to expand source patterns")
+	}
+	
+	p.printf("found %d source paths after expansion", len(expandedSources))
+	
+	// Walk all expanded sources to collect files with their source directories
+	fileToSourceMap, err := p.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		p.fatalf("failed to collect files from source patterns: %v", err)
 	}
 
-	src, err := p.walkFiles()
-
-	if err != nil {
-		p.fatalf("local files: %v", err)
+	// Extract just the file list for compatibility
+	src := make([]string, 0, len(fileToSourceMap))
+	for file := range fileToSourceMap {
+		src = append(src, file)
 	}
 
 	// result contains upload result of a single file
@@ -149,7 +154,9 @@ func (p *Plugin) Exec(client *storage.Client) error {
 		buf <- struct{}{} // alloc one slot
 
 		go func(f string) {
-			rel, err := filepath.Rel(p.Config.Source, f)
+			// Get the correct source directory for this file
+			sourceDir := fileToSourceMap[f]
+			rel, err := filepath.Rel(sourceDir, f)
 
 			if err != nil {
 				res <- &result{f, err}
@@ -285,34 +292,247 @@ func (p *Plugin) matchGzip(file string) bool {
 	return i < len(p.Config.Gzip) && p.Config.Gzip[i] == ext
 }
 
-// walkFiles creates a complete set of files to upload
-// by walking p.Source recursively.
-//
-// It excludes files matching p.Ignore pattern.
-// The ignore pattern is matched using filepath.Match against a partial
-// file name, relative to p.Source.
-func (p *Plugin) walkFiles() ([]string, error) {
-	var items []string
+// isGlobPattern checks if a path contains glob pattern characters
+func isGlobPattern(path string) bool {
+	return strings.ContainsAny(path, "*?[]") || strings.Contains(path, "**")
+}
 
-	err := filepath.Walk(p.Config.Source, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
+// expandGlobPatterns expands glob patterns and comma-separated paths into a list of actual paths
+func (p *Plugin) expandGlobPatterns(patterns string) ([]string, error) {
+	if patterns == "" {
+		return nil, fmt.Errorf("source pattern cannot be empty")
+	}
+
+	// Split by comma to support multiple patterns
+	patternList := strings.Split(patterns, ",")
+	var allPaths []string
+
+	for _, pattern := range patternList {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		paths, err := p.expandSinglePattern(pattern)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(paths) == 0 {
+			return nil, fmt.Errorf("glob pattern '%s' matched no files or directories", pattern)
+		}
+
+		allPaths = append(allPaths, paths...)
+	}
+
+	// Remove duplicates while preserving order
+	return p.removeDuplicatePaths(allPaths), nil
+}
+
+// expandSinglePattern expands a single glob pattern or returns the path as-is if not a glob
+func (p *Plugin) expandSinglePattern(pattern string) ([]string, error) {
+	// Convert to absolute path if relative
+	if !filepath.IsAbs(pattern) {
+		pwd, err := os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get working directory: %w", err)
+		}
+		pattern = filepath.Join(pwd, pattern)
+	}
+
+	// If not a glob pattern, check if path exists and return as-is
+	if !isGlobPattern(pattern) {
+		if _, err := os.Stat(pattern); err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("source path '%s' does not exist", pattern)
+			}
+			if os.IsPermission(err) {
+				return nil, fmt.Errorf("permission denied accessing '%s': %w", pattern, err)
+			}
+			return nil, fmt.Errorf("error accessing '%s': %w", pattern, err)
+		}
+		return []string{pattern}, nil
+	}
+
+	// Handle double-star (**) patterns for recursive matching
+	if strings.Contains(pattern, "**") {
+		return p.expandDoubleStarPattern(pattern)
+	}
+
+	// Use standard filepath.Glob for simple patterns
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid glob pattern '%s': %w", pattern, err)
+	}
+
+	return matches, nil
+}
+
+// expandDoubleStarPattern handles ** (recursive) glob patterns
+func (p *Plugin) expandDoubleStarPattern(pattern string) ([]string, error) {
+	// Split pattern at ** to get base path and suffix pattern
+	parts := strings.Split(pattern, "**")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid double-star pattern '%s': only one ** is supported", pattern)
+	}
+
+	basePath := strings.TrimSuffix(parts[0], string(filepath.Separator))
+	suffixPattern := strings.TrimPrefix(parts[1], string(filepath.Separator))
+
+	// Ensure base path exists
+	if _, err := os.Stat(basePath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("base path '%s' does not exist", basePath)
+		}
+		return nil, fmt.Errorf("error accessing base path '%s': %w", basePath, err)
+	}
+
+	var matches []string
+	err := filepath.Walk(basePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			// Log permission errors but continue
+			if os.IsPermission(err) {
+				p.printf("Warning: permission denied accessing '%s', skipping", path)
+				return nil
+			}
 			return err
 		}
 
-		rel, err := filepath.Rel(p.Config.Source, path)
+		// Skip if it's the base path itself
+		if path == basePath {
+			return nil
+		}
 
+		// Get relative path from base
+		rel, err := filepath.Rel(basePath, path)
 		if err != nil {
 			return err
 		}
 
-		var ignore bool
-
-		if p.Config.Ignore != "" {
-			ignore, err = filepath.Match(p.Config.Ignore, rel)
+		// Match against suffix pattern
+		matched := true
+		if suffixPattern != "" {
+			matched, err = filepath.Match(suffixPattern, rel)
+			if err != nil {
+				return fmt.Errorf("invalid suffix pattern '%s': %w", suffixPattern, err)
+			}
 		}
 
-		if err != nil || ignore {
+		if matched {
+			matches = append(matches, path)
+		}
+
+		return nil
+	})
+
+	return matches, err
+}
+
+// removeDuplicatePaths removes duplicate paths while preserving order
+func (p *Plugin) removeDuplicatePaths(paths []string) []string {
+	seen := make(map[string]bool)
+	var unique []string
+
+	for _, path := range paths {
+		if !seen[path] {
+			seen[path] = true
+			unique = append(unique, path)
+		}
+	}
+
+	return unique
+}
+
+// walkGlobFiles creates a complete set of files to upload from multiple source paths
+// It supports glob patterns and maintains the ignore pattern behavior for each source
+func (p *Plugin) walkGlobFiles(sources []string) ([]string, error) {
+	fileToSourceMap, err := p.walkGlobFilesWithSources(sources)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract just the file list
+	files := make([]string, 0, len(fileToSourceMap))
+	for file := range fileToSourceMap {
+		files = append(files, file)
+	}
+
+	// Remove duplicates that might occur from overlapping glob patterns
+	return p.removeDuplicatePaths(files), nil
+}
+
+// walkGlobFilesWithSources creates a map of files to their source directories
+// This is needed to calculate correct relative paths for upload
+func (p *Plugin) walkGlobFilesWithSources(sources []string) (map[string]string, error) {
+	fileToSourceMap := make(map[string]string)
+
+	for _, source := range sources {
+		files, err := p.walkSingleSource(source)
+		if err != nil {
+			return nil, fmt.Errorf("error processing source '%s': %w", source, err)
+		}
+
+		// Determine the base directory for relative path calculation
+		baseDir := source
+		if info, err := os.Stat(source); err == nil && !info.IsDir() {
+			// If source is a file, use its directory as base
+			baseDir = filepath.Dir(source)
+		}
+
+		// Map each file to its source base directory
+		for _, file := range files {
+			// Only add if not already present (avoid duplicates from overlapping patterns)
+			if _, exists := fileToSourceMap[file]; !exists {
+				fileToSourceMap[file] = baseDir
+			}
+		}
+	}
+
+	return fileToSourceMap, nil
+}
+
+// walkSingleSource walks a single source path and collects files
+// This replaces the logic from the original walkFiles function
+func (p *Plugin) walkSingleSource(sourcePath string) ([]string, error) {
+	var items []string
+
+	// Check if source is a file or directory
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("source path '%s' does not exist", sourcePath)
+		}
+		if os.IsPermission(err) {
+			return nil, fmt.Errorf("permission denied accessing '%s': %w", sourcePath, err)
+		}
+		return nil, fmt.Errorf("error accessing '%s': %w", sourcePath, err)
+	}
+
+	// If it's a file, add it directly (after checking ignore pattern)
+	if !info.IsDir() {
+		if p.shouldIgnoreFile(sourcePath, sourcePath) {
+			return items, nil // Return empty list if file should be ignored
+		}
+		return []string{sourcePath}, nil
+	}
+
+	// If it's a directory, walk it recursively
+	err = filepath.Walk(sourcePath, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			// Log permission errors but continue
+			if os.IsPermission(err) {
+				p.printf("Warning: permission denied accessing '%s', skipping", path)
+				return nil
+			}
 			return err
+		}
+
+		if fi.IsDir() {
+			return nil
+		}
+
+		if p.shouldIgnoreFile(sourcePath, path) {
+			return nil
 		}
 
 		items = append(items, path)
@@ -320,6 +540,42 @@ func (p *Plugin) walkFiles() ([]string, error) {
 	})
 
 	return items, err
+}
+
+// shouldIgnoreFile checks if a file should be ignored based on the ignore pattern
+// It maintains backward compatibility with the original ignore logic
+func (p *Plugin) shouldIgnoreFile(sourcePath string, filePath string) bool {
+	if p.Config.Ignore == "" {
+		return false
+	}
+
+	// Get relative path from source for ignore pattern matching
+	rel, err := filepath.Rel(sourcePath, filePath)
+	if err != nil {
+		p.printf("Warning: failed to get relative path for '%s': %v", filePath, err)
+		return false
+	}
+
+	// Support multiple ignore patterns separated by comma
+	ignorePatterns := strings.Split(p.Config.Ignore, ",")
+	for _, pattern := range ignorePatterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+
+		matched, err := filepath.Match(pattern, rel)
+		if err != nil {
+			p.printf("Warning: invalid ignore pattern '%s': %v", pattern, err)
+			continue
+		}
+
+		if matched {
+			return true
+		}
+	}
+
+	return false
 }
 
 // extractBucketName extracts the bucket name from the target path.

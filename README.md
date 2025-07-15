@@ -57,6 +57,61 @@ docker run --rm \
   plugins/gcs
 ```
 
+## Glob Pattern Support
+
+The plugin now supports glob patterns for the `PLUGIN_SOURCE` parameter, enabling flexible file selection:
+
+### Basic Glob Patterns
+
+* `*` - matches any sequence of characters (except path separators)
+* `?` - matches any single character  
+* `[]` - matches any character within brackets
+* `**` - recursive directory matching
+
+### Examples
+
+```console
+# Upload all JavaScript files from any subdirectory
+PLUGIN_SOURCE="src/**/*.js"
+
+# Upload specific file types from multiple directories
+PLUGIN_SOURCE="dist/*.html,assets/*.css,build/*.js"
+
+# Upload all files from specific directories
+PLUGIN_SOURCE="public/**,static/**"
+
+# Mixed patterns - directories and globs
+PLUGIN_SOURCE="./dist,./assets/*.png,docs/**/*.md"
+```
+
+### Multiple Pattern Support
+
+You can specify multiple patterns separated by commas:
+
+```console
+docker run --rm \
+  -e PLUGIN_SOURCE="dist/*.html,assets/**/*.{css,js},docs/*.md" \
+  -e PLUGIN_TARGET="bucket/website/" \
+  -e PLUGIN_IGNORE="**/*.tmp,**/*.log" \
+  plugins/gcs
+```
+
+### Enhanced Ignore Patterns
+
+The `PLUGIN_IGNORE` parameter also supports multiple patterns:
+
+```console
+# Ignore multiple file types and directories
+PLUGIN_IGNORE="*.log,*.tmp,node_modules/**,**/.git/**"
+```
+
+### Backward Compatibility
+
+All existing functionality remains unchanged:
+- Single directory paths work exactly as before
+- Existing ignore patterns continue to function
+- No configuration changes required for current deployments
+
 * For download
 ```console
 docker run --rm \

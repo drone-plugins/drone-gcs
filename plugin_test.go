@@ -308,3 +308,274 @@ func TestExtractBucketName(t *testing.T) {
 		}
 	}
 }
+
+// TestIsGlobPattern tests the glob pattern detection
+func TestIsGlobPattern(t *testing.T) {
+	tests := []struct {
+		path     string
+		expected bool
+	}{
+		{"simple/path", false},
+		{"path/with/dirs", false},
+		{"path/*", true},
+		{"path/file?.txt", true},
+		{"path/[abc].txt", true},
+		{"path/**/file", true},
+		{"normal-file.txt", false},
+		{"/absolute/path", false},
+		{"./relative/path", false},
+	}
+
+	for _, tc := range tests {
+		result := isGlobPattern(tc.path)
+		if result != tc.expected {
+			t.Errorf("isGlobPattern(%q) = %v; want %v", tc.path, result, tc.expected)
+		}
+	}
+}
+
+// TestExpandGlobPatterns tests glob pattern expansion
+func TestExpandGlobPatterns(t *testing.T) {
+	// Create temporary directory structure for testing
+	tmpDir, err := os.MkdirTemp("", "drone-gcs-glob-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test structure
+	testDir := filepath.Join(tmpDir, "test")
+	subDir := filepath.Join(testDir, "sub")
+	mkdirs(t, subDir)
+	writeFile(t, testDir, "file1.txt", []byte("content1"))
+	writeFile(t, testDir, "file2.js", []byte("content2"))
+	writeFile(t, subDir, "file3.css", []byte("content3"))
+
+	plugin := &Plugin{
+		Config: Config{},
+		printf: t.Logf,
+	}
+
+	tests := []struct {
+		name        string
+		pattern     string
+		expectedMin int // minimum expected matches
+		wantErr     bool
+	}{
+		{
+			name:        "single directory",
+			pattern:     testDir,
+			expectedMin: 1,
+			wantErr:     false,
+		},
+		{
+			name:        "simple glob",
+			pattern:     filepath.Join(testDir, "*.txt"),
+			expectedMin: 1,
+			wantErr:     false,
+		},
+		{
+			name:        "recursive glob",
+			pattern:     filepath.Join(testDir, "**"),
+			expectedMin: 1,
+			wantErr:     false,
+		},
+		{
+			name:        "multiple patterns",
+			pattern:     fmt.Sprintf("%s,%s", filepath.Join(testDir, "*.txt"), filepath.Join(testDir, "*.js")),
+			expectedMin: 2,
+			wantErr:     false,
+		},
+		{
+			name:    "empty pattern",
+			pattern: "",
+			wantErr: true,
+		},
+		{
+			name:    "non-existent path",
+			pattern: "/non/existent/path",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := plugin.expandGlobPatterns(tc.pattern)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if len(result) < tc.expectedMin {
+				t.Errorf("expected at least %d matches, got %d: %v", tc.expectedMin, len(result), result)
+			}
+		})
+	}
+}
+
+// TestWalkGlobFiles tests file collection from multiple sources
+func TestWalkGlobFiles(t *testing.T) {
+	// Create temporary directory structure
+	tmpDir, err := os.MkdirTemp("", "drone-gcs-walk-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test structure
+	dir1 := filepath.Join(tmpDir, "dir1")
+	dir2 := filepath.Join(tmpDir, "dir2")
+	mkdirs(t, dir1)
+	mkdirs(t, dir2)
+	writeFile(t, dir1, "file1.txt", []byte("content1"))
+	writeFile(t, dir2, "file2.txt", []byte("content2"))
+
+	plugin := &Plugin{
+		Config: Config{},
+		printf: t.Logf,
+	}
+
+	sources := []string{dir1, dir2}
+	files, err := plugin.walkGlobFiles(sources)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	if len(files) != 2 {
+		t.Errorf("expected 2 files, got %d: %v", len(files), files)
+	}
+}
+
+// TestShouldIgnoreFile tests ignore pattern functionality
+func TestShouldIgnoreFile(t *testing.T) {
+	tests := []struct {
+		name         string
+		ignorePattern string
+		sourcePath   string
+		filePath     string
+		expected     bool
+	}{
+		{
+			name:         "no ignore pattern",
+			ignorePattern: "",
+			sourcePath:   "/src",
+			filePath:     "/src/file.txt",
+			expected:     false,
+		},
+		{
+			name:         "simple ignore",
+			ignorePattern: "*.log",
+			sourcePath:   "/src",
+			filePath:     "/src/debug.log",
+			expected:     true,
+		},
+		{
+			name:         "no match",
+			ignorePattern: "*.log",
+			sourcePath:   "/src",
+			filePath:     "/src/file.txt",
+			expected:     false,
+		},
+		{
+			name:         "multiple patterns - match first",
+			ignorePattern: "*.log,*.tmp",
+			sourcePath:   "/src",
+			filePath:     "/src/debug.log",
+			expected:     true,
+		},
+		{
+			name:         "multiple patterns - match second",
+			ignorePattern: "*.log,*.tmp",
+			sourcePath:   "/src",
+			filePath:     "/src/cache.tmp",
+			expected:     true,
+		},
+		{
+			name:         "multiple patterns - no match",
+			ignorePattern: "*.log,*.tmp",
+			sourcePath:   "/src",
+			filePath:     "/src/file.txt",
+			expected:     false,
+		},
+	}
+
+	plugin := &Plugin{
+		printf: t.Logf,
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			plugin.Config.Ignore = tc.ignorePattern
+			result := plugin.shouldIgnoreFile(tc.sourcePath, tc.filePath)
+			if result != tc.expected {
+				t.Errorf("shouldIgnoreFile(%q, %q) with pattern %q = %v; want %v",
+					tc.sourcePath, tc.filePath, tc.ignorePattern, result, tc.expected)
+			}
+		})
+	}
+}
+
+// TestBackwardCompatibility tests that existing functionality still works
+func TestBackwardCompatibility(t *testing.T) {
+	// Create temporary directory structure
+	tmpDir, err := os.MkdirTemp("", "drone-gcs-compat-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test structure similar to original tests
+	uploadDir := filepath.Join(tmpDir, "upload")
+	subDir := filepath.Join(uploadDir, "sub")
+	mkdirs(t, subDir)
+	writeFile(t, uploadDir, "file.txt", []byte("text"))
+	writeFile(t, uploadDir, "file.js", []byte("javascript"))
+	writeFile(t, subDir, "file.css", []byte("sub style"))
+	writeFile(t, subDir, "file.bin", []byte("rubbish"))
+
+	plugin := &Plugin{
+		Config: Config{
+			Source: uploadDir, // Single directory path (backward compatible)
+			Ignore: "sub/*.bin", // Ignore pattern (backward compatible)
+		},
+		printf: t.Logf,
+	}
+
+	// Test that single directory path still works
+	expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+	if err != nil {
+		t.Errorf("unexpected error expanding single directory: %v", err)
+		return
+	}
+
+	if len(expandedSources) != 1 || expandedSources[0] != uploadDir {
+		t.Errorf("expected single source %q, got %v", uploadDir, expandedSources)
+		return
+	}
+
+	// Test file collection with ignore patterns
+	files, err := plugin.walkGlobFiles(expandedSources)
+	if err != nil {
+		t.Errorf("unexpected error walking files: %v", err)
+		return
+	}
+
+	// Should have 3 files (excluding the ignored .bin file)
+	expectedFiles := 3
+	if len(files) != expectedFiles {
+		t.Errorf("expected %d files, got %d: %v", expectedFiles, len(files), files)
+	}
+
+	// Verify .bin file is excluded
+	for _, file := range files {
+		if strings.HasSuffix(file, ".bin") {
+			t.Errorf("found .bin file %q that should have been ignored", file)
+		}
+	}
+}
