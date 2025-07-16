@@ -308,3 +308,696 @@ func TestExtractBucketName(t *testing.T) {
 		}
 	}
 }
+
+// TestIsGlobPattern tests the glob pattern detection
+func TestIsGlobPattern(t *testing.T) {
+	tests := []struct {
+		path     string
+		expected bool
+	}{
+		{"simple/path", false},
+		{"path/with/dirs", false},
+		{"path/*", true},
+		{"path/file?.txt", true},
+		{"path/[abc].txt", true},
+		{"path/**/file", true},
+		{"normal-file.txt", false},
+		{"/absolute/path", false},
+		{"./relative/path", false},
+	}
+
+	for _, tc := range tests {
+		result := isGlobPattern(tc.path)
+		if result != tc.expected {
+			t.Errorf("isGlobPattern(%q) = %v; want %v", tc.path, result, tc.expected)
+		}
+	}
+}
+
+// TestExpandGlobPatterns tests glob pattern expansion
+func TestExpandGlobPatterns(t *testing.T) {
+	// Create temporary directory structure for testing
+	tmpDir, err := os.MkdirTemp("", "drone-gcs-glob-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test structure
+	testDir := filepath.Join(tmpDir, "test")
+	subDir := filepath.Join(testDir, "sub")
+	mkdirs(t, subDir)
+	writeFile(t, testDir, "file1.txt", []byte("content1"))
+	writeFile(t, testDir, "file2.js", []byte("content2"))
+	writeFile(t, subDir, "file3.css", []byte("content3"))
+
+	plugin := &Plugin{
+		Config: Config{},
+		printf: t.Logf,
+	}
+
+	tests := []struct {
+		name        string
+		pattern     string
+		expectedMin int // minimum expected matches
+		wantErr     bool
+	}{
+		{
+			name:        "single directory",
+			pattern:     testDir,
+			expectedMin: 1,
+			wantErr:     false,
+		},
+		{
+			name:        "simple glob",
+			pattern:     filepath.Join(testDir, "*.txt"),
+			expectedMin: 1,
+			wantErr:     false,
+		},
+		{
+			name:        "recursive glob",
+			pattern:     filepath.Join(testDir, "**"),
+			expectedMin: 1,
+			wantErr:     false,
+		},
+		{
+			name:        "multiple patterns",
+			pattern:     fmt.Sprintf("%s,%s", filepath.Join(testDir, "*.txt"), filepath.Join(testDir, "*.js")),
+			expectedMin: 2,
+			wantErr:     false,
+		},
+		{
+			name:    "empty pattern",
+			pattern: "",
+			wantErr: true,
+		},
+		{
+			name:    "non-existent path",
+			pattern: "/non/existent/path",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := plugin.expandGlobPatterns(tc.pattern)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+			if len(result) < tc.expectedMin {
+				t.Errorf("expected at least %d matches, got %d: %v", tc.expectedMin, len(result), result)
+			}
+		})
+	}
+}
+
+// TestWalkGlobFiles tests file collection from multiple sources
+func TestWalkGlobFiles(t *testing.T) {
+	// Create temporary directory structure
+	tmpDir, err := os.MkdirTemp("", "drone-gcs-walk-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test structure
+	dir1 := filepath.Join(tmpDir, "dir1")
+	dir2 := filepath.Join(tmpDir, "dir2")
+	mkdirs(t, dir1)
+	mkdirs(t, dir2)
+	writeFile(t, dir1, "file1.txt", []byte("content1"))
+	writeFile(t, dir2, "file2.txt", []byte("content2"))
+
+	plugin := &Plugin{
+		Config: Config{},
+		printf: t.Logf,
+	}
+
+	sources := []string{dir1, dir2}
+	files, err := plugin.walkGlobFiles(sources)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	if len(files) != 2 {
+		t.Errorf("expected 2 files, got %d: %v", len(files), files)
+	}
+}
+
+// TestShouldIgnoreFile tests ignore pattern functionality
+func TestShouldIgnoreFile(t *testing.T) {
+	tests := []struct {
+		name         string
+		ignorePattern string
+		sourcePath   string
+		filePath     string
+		expected     bool
+	}{
+		{
+			name:         "no ignore pattern",
+			ignorePattern: "",
+			sourcePath:   "/src",
+			filePath:     "/src/file.txt",
+			expected:     false,
+		},
+		{
+			name:         "simple ignore",
+			ignorePattern: "*.log",
+			sourcePath:   "/src",
+			filePath:     "/src/debug.log",
+			expected:     true,
+		},
+		{
+			name:         "no match",
+			ignorePattern: "*.log",
+			sourcePath:   "/src",
+			filePath:     "/src/file.txt",
+			expected:     false,
+		},
+		{
+			name:         "multiple patterns - match first",
+			ignorePattern: "*.log,*.tmp",
+			sourcePath:   "/src",
+			filePath:     "/src/debug.log",
+			expected:     true,
+		},
+		{
+			name:         "multiple patterns - match second",
+			ignorePattern: "*.log,*.tmp",
+			sourcePath:   "/src",
+			filePath:     "/src/cache.tmp",
+			expected:     true,
+		},
+		{
+			name:         "multiple patterns - no match",
+			ignorePattern: "*.log,*.tmp",
+			sourcePath:   "/src",
+			filePath:     "/src/file.txt",
+			expected:     false,
+		},
+	}
+
+	plugin := &Plugin{
+		printf: t.Logf,
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			plugin.Config.Ignore = tc.ignorePattern
+			result := plugin.shouldIgnoreFile(tc.sourcePath, tc.filePath)
+			if result != tc.expected {
+				t.Errorf("shouldIgnoreFile(%q, %q) with pattern %q = %v; want %v",
+					tc.sourcePath, tc.filePath, tc.ignorePattern, result, tc.expected)
+			}
+		})
+	}
+}
+
+// TestRootLevelGlobPatterns tests patterns like *.txt in current directory
+func TestRootLevelGlobPatterns(t *testing.T) {
+	// Create temporary directory structure for testing
+	tmpDir, err := os.MkdirTemp("", "root-glob-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory to simulate real scenario
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+
+	// Create test files in current directory
+	writeFile(t, ".", "op.txt", []byte("test content"))
+	writeFile(t, ".", "data.txt", []byte("data content"))
+	writeFile(t, ".", "readme.md", []byte("readme content"))
+
+	plugin := &Plugin{
+		Config: Config{
+			Source: "*.txt", // This is the failing pattern
+		},
+		printf: t.Logf,
+	}
+
+	// Test expansion
+	expandedSources, err := plugin.expandGlobPatterns("*.txt")
+	if err != nil {
+		t.Fatalf("expandGlobPatterns failed: %v", err)
+	}
+
+	if len(expandedSources) != 2 {
+		t.Fatalf("expected 2 .txt files, got %d: %v", len(expandedSources), expandedSources)
+	}
+
+	// Test file collection with source mapping
+	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+	}
+
+	// Test relative path calculation - this is where the bug occurs
+	for file, baseDir := range fileToSourceMap {
+		rel, err := filepath.Rel(baseDir, file)
+		if err != nil {
+			t.Errorf("filepath.Rel(%q, %q) failed: %v - THIS IS THE BUG!", baseDir, file, err)
+			continue
+		}
+		t.Logf("✅ Rel(%q, %q) = %q", baseDir, file, rel)
+		
+		// Relative path should just be the filename for root-level patterns
+		if !strings.HasSuffix(rel, ".txt") {
+			t.Errorf("expected relative path to end with .txt, got %q", rel)
+		}
+	}
+}
+
+// TestProductionScenarioReproduction reproduces the exact error from production
+func TestProductionScenarioReproduction(t *testing.T) {
+	// This test simulates what happens in the Exec function
+	tmpDir, err := os.MkdirTemp("", "production-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+
+	// Create test file
+	writeFile(t, ".", "op.txt", []byte("test content"))
+
+	plugin := &Plugin{
+		Config: Config{
+			Source: "*.txt", // Original pattern
+			Target: "bucket/path",
+		},
+		printf: t.Logf,
+	}
+
+	// Simulate the exact flow from Exec function
+	expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+	if err != nil {
+		t.Fatalf("expandGlobPatterns failed: %v", err)
+	}
+
+	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+	}
+
+	// Now simulate the problematic code from Exec function
+	for file := range fileToSourceMap {
+		// This is the line that fails in production:
+		// rel, err := filepath.Rel(p.Config.Source, f)
+		// where p.Config.Source is "*.txt" and f is "/harness/op.txt"
+		
+		// Test old broken behavior (should fail)
+		_, err := filepath.Rel(plugin.Config.Source, file)
+		if err == nil {
+			t.Errorf("Expected old behavior to fail, but it didn't")
+			continue
+		}
+		
+		// Test new fixed behavior (should work)
+		baseDir := fileToSourceMap[file]
+		rel, err := filepath.Rel(baseDir, file)
+		if err != nil {
+			t.Errorf("Fix failed: filepath.Rel(%q, %q) failed: %v", baseDir, file, err)
+			continue
+		}
+		
+		// Verify we get the expected filename
+		if rel != "op.txt" {
+			t.Errorf("expected 'op.txt', got %q", rel)
+		}
+	}
+}
+
+// TestEndToEndRootLevelGlob tests the complete flow with root-level glob patterns
+func TestEndToEndRootLevelGlob(t *testing.T) {
+	// Create temporary directory to simulate /harness working directory
+	tmpDir, err := os.MkdirTemp("", "harness-simulation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory (simulate /harness)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+
+	// Create test files directly in current directory
+	writeFile(t, ".", "op.txt", []byte("test content"))
+	writeFile(t, ".", "data.txt", []byte("data content"))
+	writeFile(t, ".", "readme.md", []byte("not matched"))
+
+	plugin := &Plugin{
+		Config: Config{
+			Source: "*.txt", // Root-level glob pattern
+			Target: "my-bucket/uploads",
+		},
+		printf: t.Logf,
+	}
+
+	// Execute the complete flow from Exec function
+	expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+	if err != nil {
+		t.Fatalf("expandGlobPatterns failed: %v", err)
+	}
+	t.Logf("✅ Expanded sources: %v", expandedSources)
+
+	// This should find 2 .txt files
+	if len(expandedSources) != 2 {
+		t.Fatalf("expected 2 .txt files, got %d: %v", len(expandedSources), expandedSources)
+	}
+
+	// Collect files with source mapping
+	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+	}
+
+	// Extract file list for upload simulation
+	src := make([]string, 0, len(fileToSourceMap))
+	for file := range fileToSourceMap {
+		src = append(src, file)
+	}
+
+	// Test the relative path calculation (this is what was failing)
+	for _, f := range src {
+		// Get the correct source directory for this file
+		sourceDir := fileToSourceMap[f]
+		rel, err := filepath.Rel(sourceDir, f)
+		if err != nil {
+			t.Errorf("filepath.Rel(%q, %q) failed: %v", sourceDir, f, err)
+			continue
+		}
+
+		t.Logf("✅ File: %s -> Relative: %s", f, rel)
+
+		// Verify the relative path is just the filename
+		if !strings.HasSuffix(rel, ".txt") {
+			t.Errorf("expected relative path to be filename, got %q", rel)
+		}
+		if strings.Contains(rel, "/") {
+			t.Errorf("relative path should not contain directory separators, got %q", rel)
+		}
+	}
+
+	t.Logf("✅ End-to-end test passed - root-level glob patterns work correctly!")
+}
+
+// TestHarnessProductionScenario simulates the exact failing production scenario
+func TestHarnessProductionScenario(t *testing.T) {
+	// Simulate the exact scenario from your production error
+	tmpDir, err := os.MkdirTemp("", "harness-prod-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory to simulate /harness working directory
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+
+	// Create the exact file from your error: op.txt
+	writeFile(t, ".", "op.txt", []byte("production test content"))
+
+	// Simulate the exact configuration from your Harness step
+	plugin := &Plugin{
+		Config: Config{
+			Source: "*.txt", // sourcePath: '*.txt'
+			Target: "op-gcs-bucket/path", // bucket: op-gcs-bucket
+		},
+		printf: t.Logf,
+	}
+
+	// Execute the exact same flow that would happen in production
+
+	// Step 1: Expand glob patterns
+	expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+	if err != nil {
+		t.Fatalf("expandGlobPatterns failed: %v", err)
+	}
+
+	// Step 2: Collect files with source mapping  
+	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+	}
+
+	// Step 3: Extract file list
+	src := make([]string, 0, len(fileToSourceMap))
+	for file := range fileToSourceMap {
+		src = append(src, file)
+	}
+
+	// Step 4: Test the critical relative path calculation
+	for _, f := range src {
+		// This is the line that was failing in production
+		sourceDir := fileToSourceMap[f]
+		rel, err := filepath.Rel(sourceDir, f)
+		if err != nil {
+			t.Fatalf("filepath.Rel(%q, %q) failed: %v - production bug not fixed!", sourceDir, f, err)
+		}
+
+		// Verify we get the expected filename
+		if rel != "op.txt" {
+			t.Errorf("expected 'op.txt', got %q", rel)
+		}
+	}
+
+	// Test passed - fix is working correctly
+}
+
+// TestAllProductionScenarios tests all the scenarios reported as failing in production
+func TestAllProductionScenarios(t *testing.T) {
+	// Create a temporary directory to simulate /harness
+	tmpDir, err := os.MkdirTemp("", "production-scenarios")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create subdirectory for testing
+	testDir := filepath.Join(tmpDir, "test")
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Change to temp directory (simulate /harness)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Error(err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create test files
+	writeFile(t, ".", "op.txt", []byte("test content"))
+	writeFile(t, testDir, "op.txt", []byte("test content in subdir"))
+
+	// Test scenarios
+	scenarios := []struct {
+		name       string
+		sourcePath string
+		expectFail bool
+	}{
+		{
+			name:       "single file in current directory",
+			sourcePath: "op.txt",
+			expectFail: false, // Should work
+		},
+		{
+			name:       "relative file path",
+			sourcePath: "./test/op.txt",
+			expectFail: false, // Should work
+		},
+		{
+			name:       "absolute glob pattern",
+			sourcePath: filepath.Join(tmpDir, "test", "*.txt"),
+			expectFail: false, // Should work (already working)
+		},
+		{
+			name:       "root-level glob pattern",
+			sourcePath: "*.txt",
+			expectFail: false, // Should work (already fixed)
+		},
+		{
+			name:       "relative glob pattern",
+			sourcePath: "./test/*.txt",
+			expectFail: false, // Should work
+		},
+	}
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			plugin := &Plugin{
+				Config: Config{
+					Source: scenario.sourcePath,
+					Target: "bucket/path",
+				},
+				printf: t.Logf,
+			}
+
+			// Test the complete flow
+			expandedSources, err := plugin.expandGlobPatterns(scenario.sourcePath)
+			if err != nil {
+				if scenario.expectFail {
+					t.Logf("Expected failure: %v", err)
+					return
+				}
+				t.Fatalf("expandGlobPatterns failed: %v", err)
+			}
+
+			fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+			if err != nil {
+				if scenario.expectFail {
+					t.Logf("Expected failure: %v", err)
+					return
+				}
+				t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+			}
+
+			// Test relative path calculation (the critical part)
+			for file, baseDir := range fileToSourceMap {
+				rel, err := filepath.Rel(baseDir, file)
+				if err != nil {
+					if scenario.expectFail {
+						t.Logf("Expected failure: filepath.Rel(%q, %q) failed: %v", baseDir, file, err)
+						return
+					}
+					t.Errorf("❌ FAILED: filepath.Rel(%q, %q) failed: %v", baseDir, file, err)
+					continue
+				}
+
+				t.Logf("✅ SUCCESS: %s -> %s (base: %s)", file, rel, baseDir)
+
+				// Verify the relative path makes sense
+				if strings.Contains(rel, "..") {
+					t.Errorf("Relative path should not contain '..': %s", rel)
+				}
+				if filepath.IsAbs(rel) {
+					t.Errorf("Relative path should not be absolute: %s", rel)
+				}
+			}
+
+			if scenario.expectFail {
+				t.Errorf("Expected failure but test passed")
+			}
+		})
+	}
+}
+
+// TestBackwardCompatibility tests that existing functionality still works
+func TestBackwardCompatibility(t *testing.T) {
+	// Create temporary directory structure
+	tmpDir, err := os.MkdirTemp("", "drone-gcs-compat-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test structure similar to original tests
+	uploadDir := filepath.Join(tmpDir, "upload")
+	subDir := filepath.Join(uploadDir, "sub")
+	mkdirs(t, subDir)
+	writeFile(t, uploadDir, "file.txt", []byte("text"))
+	writeFile(t, uploadDir, "file.js", []byte("javascript"))
+	writeFile(t, subDir, "file.css", []byte("sub style"))
+	writeFile(t, subDir, "file.bin", []byte("rubbish"))
+
+	plugin := &Plugin{
+		Config: Config{
+			Source: uploadDir, // Single directory path (backward compatible)
+			Ignore: "sub/*.bin", // Ignore pattern (backward compatible)
+		},
+		printf: t.Logf,
+	}
+
+	// Test that single directory path still works
+	expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+	if err != nil {
+		t.Errorf("unexpected error expanding single directory: %v", err)
+		return
+	}
+
+	if len(expandedSources) != 1 || expandedSources[0] != uploadDir {
+		t.Errorf("expected single source %q, got %v", uploadDir, expandedSources)
+		return
+	}
+
+	// Test file collection with ignore patterns
+	files, err := plugin.walkGlobFiles(expandedSources)
+	if err != nil {
+		t.Errorf("unexpected error walking files: %v", err)
+		return
+	}
+
+	// Should have 3 files (excluding the ignored .bin file)
+	expectedFiles := 3
+	if len(files) != expectedFiles {
+		t.Errorf("expected %d files, got %d: %v", expectedFiles, len(files), files)
+	}
+
+	// Verify .bin file is excluded
+	for _, file := range files {
+		if strings.HasSuffix(file, ".bin") {
+			t.Errorf("found .bin file %q that should have been ignored", file)
+		}
+	}
+}
