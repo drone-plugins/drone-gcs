@@ -466,6 +466,12 @@ func (p *Plugin) walkGlobFiles(sources []string) ([]string, error) {
 func (p *Plugin) walkGlobFilesWithSources(sources []string) (map[string]string, error) {
 	fileToSourceMap := make(map[string]string)
 
+	// Get current working directory for root-level patterns
+	pwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get working directory: %w", err)
+	}
+
 	for _, source := range sources {
 		files, err := p.walkSingleSource(source)
 		if err != nil {
@@ -473,10 +479,25 @@ func (p *Plugin) walkGlobFilesWithSources(sources []string) (map[string]string, 
 		}
 
 		// Determine the base directory for relative path calculation
-		baseDir := source
+		var baseDir string
+		
 		if info, err := os.Stat(source); err == nil && !info.IsDir() {
-			// If source is a file, use its directory as base
+			// If source is a file (from glob expansion), use its directory as base
 			baseDir = filepath.Dir(source)
+		} else {
+			// If source is a directory, use it as base
+			baseDir = source
+		}
+
+		// Handle edge cases for base directory
+		if baseDir == "." || baseDir == "" {
+			// For current directory references, use absolute path
+			baseDir = pwd
+		}
+
+		// Ensure baseDir is absolute for consistent relative path calculation
+		if !filepath.IsAbs(baseDir) {
+			baseDir = filepath.Join(pwd, baseDir)
 		}
 
 		// Map each file to its source base directory

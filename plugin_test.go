@@ -521,6 +521,267 @@ func TestShouldIgnoreFile(t *testing.T) {
 	}
 }
 
+// TestRootLevelGlobPatterns tests patterns like *.txt in current directory
+func TestRootLevelGlobPatterns(t *testing.T) {
+	// Create temporary directory structure for testing
+	tmpDir, err := os.MkdirTemp("", "root-glob-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory to simulate real scenario
+	oldDir, _ := os.Getwd()
+	defer os.Chdir(oldDir)
+	os.Chdir(tmpDir)
+
+	// Create test files in current directory
+	writeFile(t, ".", "op.txt", []byte("test content"))
+	writeFile(t, ".", "data.txt", []byte("data content"))
+	writeFile(t, ".", "readme.md", []byte("readme content"))
+
+	plugin := &Plugin{
+		Config: Config{
+			Source: "*.txt", // This is the failing pattern
+		},
+		printf: t.Logf,
+	}
+
+	// Test expansion
+	expandedSources, err := plugin.expandGlobPatterns("*.txt")
+	if err != nil {
+		t.Fatalf("expandGlobPatterns failed: %v", err)
+	}
+
+	if len(expandedSources) != 2 {
+		t.Fatalf("expected 2 .txt files, got %d: %v", len(expandedSources), expandedSources)
+	}
+
+	// Test file collection with source mapping
+	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+	}
+
+	// Test relative path calculation - this is where the bug occurs
+	for file, baseDir := range fileToSourceMap {
+		rel, err := filepath.Rel(baseDir, file)
+		if err != nil {
+			t.Errorf("filepath.Rel(%q, %q) failed: %v - THIS IS THE BUG!", baseDir, file, err)
+			continue
+		}
+		t.Logf("✅ Rel(%q, %q) = %q", baseDir, file, rel)
+		
+		// Relative path should just be the filename for root-level patterns
+		if !strings.HasSuffix(rel, ".txt") {
+			t.Errorf("expected relative path to end with .txt, got %q", rel)
+		}
+	}
+}
+
+// TestProductionScenarioReproduction reproduces the exact error from production
+func TestProductionScenarioReproduction(t *testing.T) {
+	// This test simulates what happens in the Exec function
+	tmpDir, err := os.MkdirTemp("", "production-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory
+	oldDir, _ := os.Getwd()
+	defer os.Chdir(oldDir)
+	os.Chdir(tmpDir)
+
+	// Create test file
+	writeFile(t, ".", "op.txt", []byte("test content"))
+
+	plugin := &Plugin{
+		Config: Config{
+			Source: "*.txt", // Original pattern
+			Target: "bucket/path",
+		},
+		printf: t.Logf,
+	}
+
+	// Simulate the exact flow from Exec function
+	expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+	if err != nil {
+		t.Fatalf("expandGlobPatterns failed: %v", err)
+	}
+
+	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+	}
+
+	// Now simulate the problematic code from Exec function
+	for file := range fileToSourceMap {
+		// This is the line that fails in production:
+		// rel, err := filepath.Rel(p.Config.Source, f)
+		// where p.Config.Source is "*.txt" and f is "/harness/op.txt"
+		
+		// Test old broken behavior (should fail)
+		_, err := filepath.Rel(plugin.Config.Source, file)
+		if err == nil {
+			t.Errorf("Expected old behavior to fail, but it didn't")
+			continue
+		}
+		
+		// Test new fixed behavior (should work)
+		baseDir := fileToSourceMap[file]
+		rel, err := filepath.Rel(baseDir, file)
+		if err != nil {
+			t.Errorf("Fix failed: filepath.Rel(%q, %q) failed: %v", baseDir, file, err)
+			continue
+		}
+		
+		// Verify we get the expected filename
+		if rel != "op.txt" {
+			t.Errorf("expected 'op.txt', got %q", rel)
+		}
+	}
+}
+
+// TestEndToEndRootLevelGlob tests the complete flow with root-level glob patterns
+func TestEndToEndRootLevelGlob(t *testing.T) {
+	// Create temporary directory to simulate /harness working directory
+	tmpDir, err := os.MkdirTemp("", "harness-simulation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory (simulate /harness)
+	oldDir, _ := os.Getwd()
+	defer os.Chdir(oldDir)
+	os.Chdir(tmpDir)
+
+	// Create test files directly in current directory
+	writeFile(t, ".", "op.txt", []byte("test content"))
+	writeFile(t, ".", "data.txt", []byte("data content"))
+	writeFile(t, ".", "readme.md", []byte("not matched"))
+
+	plugin := &Plugin{
+		Config: Config{
+			Source: "*.txt", // Root-level glob pattern
+			Target: "my-bucket/uploads",
+		},
+		printf: t.Logf,
+	}
+
+	// Execute the complete flow from Exec function
+	expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+	if err != nil {
+		t.Fatalf("expandGlobPatterns failed: %v", err)
+	}
+	t.Logf("✅ Expanded sources: %v", expandedSources)
+
+	// This should find 2 .txt files
+	if len(expandedSources) != 2 {
+		t.Fatalf("expected 2 .txt files, got %d: %v", len(expandedSources), expandedSources)
+	}
+
+	// Collect files with source mapping
+	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+	}
+
+	// Extract file list for upload simulation
+	src := make([]string, 0, len(fileToSourceMap))
+	for file := range fileToSourceMap {
+		src = append(src, file)
+	}
+
+	// Test the relative path calculation (this is what was failing)
+	for _, f := range src {
+		// Get the correct source directory for this file
+		sourceDir := fileToSourceMap[f]
+		rel, err := filepath.Rel(sourceDir, f)
+		if err != nil {
+			t.Errorf("filepath.Rel(%q, %q) failed: %v", sourceDir, f, err)
+			continue
+		}
+
+		t.Logf("✅ File: %s -> Relative: %s", f, rel)
+
+		// Verify the relative path is just the filename
+		if !strings.HasSuffix(rel, ".txt") {
+			t.Errorf("expected relative path to be filename, got %q", rel)
+		}
+		if strings.Contains(rel, "/") {
+			t.Errorf("relative path should not contain directory separators, got %q", rel)
+		}
+	}
+
+	t.Logf("✅ End-to-end test passed - root-level glob patterns work correctly!")
+}
+
+// TestHarnessProductionScenario simulates the exact failing production scenario
+func TestHarnessProductionScenario(t *testing.T) {
+	// Simulate the exact scenario from your production error
+	tmpDir, err := os.MkdirTemp("", "harness-prod-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory to simulate /harness working directory
+	oldDir, _ := os.Getwd()
+	defer os.Chdir(oldDir)
+	os.Chdir(tmpDir)
+
+	// Create the exact file from your error: op.txt
+	writeFile(t, ".", "op.txt", []byte("production test content"))
+
+	// Simulate the exact configuration from your Harness step
+	plugin := &Plugin{
+		Config: Config{
+			Source: "*.txt", // sourcePath: '*.txt'
+			Target: "op-gcs-bucket/path", // bucket: op-gcs-bucket
+		},
+		printf: t.Logf,
+	}
+
+	// Execute the exact same flow that would happen in production
+
+	// Step 1: Expand glob patterns
+	expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+	if err != nil {
+		t.Fatalf("expandGlobPatterns failed: %v", err)
+	}
+
+	// Step 2: Collect files with source mapping  
+	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+	if err != nil {
+		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+	}
+
+	// Step 3: Extract file list
+	src := make([]string, 0, len(fileToSourceMap))
+	for file := range fileToSourceMap {
+		src = append(src, file)
+	}
+
+	// Step 4: Test the critical relative path calculation
+	for _, f := range src {
+		// This is the line that was failing in production
+		sourceDir := fileToSourceMap[f]
+		rel, err := filepath.Rel(sourceDir, f)
+		if err != nil {
+			t.Fatalf("filepath.Rel(%q, %q) failed: %v - production bug not fixed!", sourceDir, f, err)
+		}
+
+		// Verify we get the expected filename
+		if rel != "op.txt" {
+			t.Errorf("expected 'op.txt', got %q", rel)
+		}
+	}
+
+	// Test passed - fix is working correctly
+}
+
 // TestBackwardCompatibility tests that existing functionality still works
 func TestBackwardCompatibility(t *testing.T) {
 	// Create temporary directory structure
