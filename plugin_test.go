@@ -531,9 +531,18 @@ func TestRootLevelGlobPatterns(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Change to temp directory to simulate real scenario
-	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
 
 	// Create test files in current directory
 	writeFile(t, ".", "op.txt", []byte("test content"))
@@ -589,9 +598,18 @@ func TestProductionScenarioReproduction(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Change to temp directory
-	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
 
 	// Create test file
 	writeFile(t, ".", "op.txt", []byte("test content"))
@@ -653,9 +671,18 @@ func TestEndToEndRootLevelGlob(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Change to temp directory (simulate /harness)
-	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
 
 	// Create test files directly in current directory
 	writeFile(t, ".", "op.txt", []byte("test content"))
@@ -728,9 +755,18 @@ func TestHarnessProductionScenario(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// Change to temp directory to simulate /harness working directory
-	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tmpDir)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Errorf("failed to restore directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
 
 	// Create the exact file from your error: op.txt
 	writeFile(t, ".", "op.txt", []byte("production test content"))
