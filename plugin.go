@@ -202,14 +202,8 @@ func (p *Plugin) uploadFile(dst, file string) error {
 	}
 
 	defer r.Close()
-	rel, err := filepath.Rel(p.Config.Source, file)
 
-	if err != nil {
-		return err
-	}
-
-	name := path.Join(p.Config.Target, rel)
-	w := p.bucket.Object(name).NewWriter(context.Background())
+	w := p.bucket.Object(dst).NewWriter(context.Background())
 	w.CacheControl = p.Config.CacheControl
 	w.Metadata = p.Config.Metadata
 
@@ -217,7 +211,7 @@ func (p *Plugin) uploadFile(dst, file string) error {
 		a := strings.SplitN(s, ":", 2)
 
 		if len(a) != 2 {
-			return fmt.Errorf("%s: invalid ACL %q", name, s)
+			return fmt.Errorf("%s: invalid ACL %q", dst, s)
 		}
 
 		w.ACL = append(w.ACL, storage.ACLRule{
@@ -481,12 +475,22 @@ func (p *Plugin) walkGlobFilesWithSources(sources []string) (map[string]string, 
 		// Determine the base directory for relative path calculation
 		var baseDir string
 		
-		if info, err := os.Stat(source); err == nil && !info.IsDir() {
+		// Ensure source is absolute first
+		absSource := source
+		if !filepath.IsAbs(source) {
+			var err error
+			absSource, err = filepath.Abs(source)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get absolute path for '%s': %w", source, err)
+			}
+		}
+		
+		if info, err := os.Stat(absSource); err == nil && !info.IsDir() {
 			// If source is a file (from glob expansion), use its directory as base
-			baseDir = filepath.Dir(source)
+			baseDir = filepath.Dir(absSource)
 		} else {
 			// If source is a directory, use it as base
-			baseDir = source
+			baseDir = absSource
 		}
 
 		// Handle edge cases for base directory

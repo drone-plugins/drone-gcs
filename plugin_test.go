@@ -818,6 +818,131 @@ func TestHarnessProductionScenario(t *testing.T) {
 	// Test passed - fix is working correctly
 }
 
+// TestAllProductionScenarios tests all the scenarios reported as failing in production
+func TestAllProductionScenarios(t *testing.T) {
+	// Create a temporary directory to simulate /harness
+	tmpDir, err := os.MkdirTemp("", "production-scenarios")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create subdirectory for testing
+	testDir := filepath.Join(tmpDir, "test")
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Change to temp directory (simulate /harness)
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Error(err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create test files
+	writeFile(t, ".", "op.txt", []byte("test content"))
+	writeFile(t, testDir, "op.txt", []byte("test content in subdir"))
+
+	// Test scenarios
+	scenarios := []struct {
+		name       string
+		sourcePath string
+		expectFail bool
+	}{
+		{
+			name:       "single file in current directory",
+			sourcePath: "op.txt",
+			expectFail: false, // Should work
+		},
+		{
+			name:       "relative file path",
+			sourcePath: "./test/op.txt",
+			expectFail: false, // Should work
+		},
+		{
+			name:       "absolute glob pattern",
+			sourcePath: filepath.Join(tmpDir, "test", "*.txt"),
+			expectFail: false, // Should work (already working)
+		},
+		{
+			name:       "root-level glob pattern",
+			sourcePath: "*.txt",
+			expectFail: false, // Should work (already fixed)
+		},
+		{
+			name:       "relative glob pattern",
+			sourcePath: "./test/*.txt",
+			expectFail: false, // Should work
+		},
+	}
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			plugin := &Plugin{
+				Config: Config{
+					Source: scenario.sourcePath,
+					Target: "bucket/path",
+				},
+				printf: t.Logf,
+			}
+
+			// Test the complete flow
+			expandedSources, err := plugin.expandGlobPatterns(scenario.sourcePath)
+			if err != nil {
+				if scenario.expectFail {
+					t.Logf("Expected failure: %v", err)
+					return
+				}
+				t.Fatalf("expandGlobPatterns failed: %v", err)
+			}
+
+			fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
+			if err != nil {
+				if scenario.expectFail {
+					t.Logf("Expected failure: %v", err)
+					return
+				}
+				t.Fatalf("walkGlobFilesWithSources failed: %v", err)
+			}
+
+			// Test relative path calculation (the critical part)
+			for file, baseDir := range fileToSourceMap {
+				rel, err := filepath.Rel(baseDir, file)
+				if err != nil {
+					if scenario.expectFail {
+						t.Logf("Expected failure: filepath.Rel(%q, %q) failed: %v", baseDir, file, err)
+						return
+					}
+					t.Errorf("❌ FAILED: filepath.Rel(%q, %q) failed: %v", baseDir, file, err)
+					continue
+				}
+
+				t.Logf("✅ SUCCESS: %s -> %s (base: %s)", file, rel, baseDir)
+
+				// Verify the relative path makes sense
+				if strings.Contains(rel, "..") {
+					t.Errorf("Relative path should not contain '..': %s", rel)
+				}
+				if filepath.IsAbs(rel) {
+					t.Errorf("Relative path should not be absolute: %s", rel)
+				}
+			}
+
+			if scenario.expectFail {
+				t.Errorf("Expected failure but test passed")
+			}
+		})
+	}
+}
+
 // TestBackwardCompatibility tests that existing functionality still works
 func TestBackwardCompatibility(t *testing.T) {
 	// Create temporary directory structure
