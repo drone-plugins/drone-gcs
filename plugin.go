@@ -119,15 +119,15 @@ func (p *Plugin) Exec(client *storage.Client) error {
 
 	// create a list of files to upload using glob pattern expansion
 	p.printf("expanding source patterns: %s", p.Config.Source)
-	
+
 	// Expand glob patterns into actual source paths
 	expandedSources, err := p.expandGlobPatterns(p.Config.Source)
 	if err != nil {
 		return errors.Wrap(err, "failed to expand source patterns")
 	}
-	
+
 	p.printf("found %d source paths after expansion", len(expandedSources))
-	
+
 	// Walk all expanded sources to collect files with their source directories
 	fileToSourceMap, err := p.walkGlobFilesWithSources(expandedSources)
 	if err != nil {
@@ -474,7 +474,7 @@ func (p *Plugin) walkGlobFilesWithSources(sources []string) (map[string]string, 
 
 		// Determine the base directory for relative path calculation
 		var baseDir string
-		
+
 		// Ensure source is absolute first
 		absSource := source
 		if !filepath.IsAbs(source) {
@@ -484,7 +484,7 @@ func (p *Plugin) walkGlobFilesWithSources(sources []string) (map[string]string, 
 				return nil, fmt.Errorf("failed to get absolute path for '%s': %w", source, err)
 			}
 		}
-		
+
 		if info, err := os.Stat(absSource); err == nil && !info.IsDir() {
 			// If source is a file (from glob expansion), use its directory as base
 			baseDir = filepath.Dir(absSource)
@@ -535,7 +535,9 @@ func (p *Plugin) walkSingleSource(sourcePath string) ([]string, error) {
 
 	// If it's a file, add it directly (after checking ignore pattern)
 	if !info.IsDir() {
-		if p.shouldIgnoreFile(sourcePath, sourcePath) {
+		// For files, use the directory as the source path for ignore pattern matching
+		sourceDir := filepath.Dir(sourcePath)
+		if p.shouldIgnoreFile(sourceDir, sourcePath) {
 			return items, nil // Return empty list if file should be ignored
 		}
 		return []string{sourcePath}, nil
