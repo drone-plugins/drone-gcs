@@ -455,53 +455,53 @@ func TestWalkGlobFiles(t *testing.T) {
 // TestShouldIgnoreFile tests ignore pattern functionality
 func TestShouldIgnoreFile(t *testing.T) {
 	tests := []struct {
-		name         string
+		name          string
 		ignorePattern string
-		sourcePath   string
-		filePath     string
-		expected     bool
+		sourcePath    string
+		filePath      string
+		expected      bool
 	}{
 		{
-			name:         "no ignore pattern",
+			name:          "no ignore pattern",
 			ignorePattern: "",
-			sourcePath:   "/src",
-			filePath:     "/src/file.txt",
-			expected:     false,
+			sourcePath:    "/src",
+			filePath:      "/src/file.txt",
+			expected:      false,
 		},
 		{
-			name:         "simple ignore",
+			name:          "simple ignore",
 			ignorePattern: "*.log",
-			sourcePath:   "/src",
-			filePath:     "/src/debug.log",
-			expected:     true,
+			sourcePath:    "/src",
+			filePath:      "/src/debug.log",
+			expected:      true,
 		},
 		{
-			name:         "no match",
+			name:          "no match",
 			ignorePattern: "*.log",
-			sourcePath:   "/src",
-			filePath:     "/src/file.txt",
-			expected:     false,
+			sourcePath:    "/src",
+			filePath:      "/src/file.txt",
+			expected:      false,
 		},
 		{
-			name:         "multiple patterns - match first",
+			name:          "multiple patterns - match first",
 			ignorePattern: "*.log,*.tmp",
-			sourcePath:   "/src",
-			filePath:     "/src/debug.log",
-			expected:     true,
+			sourcePath:    "/src",
+			filePath:      "/src/debug.log",
+			expected:      true,
 		},
 		{
-			name:         "multiple patterns - match second",
+			name:          "multiple patterns - match second",
 			ignorePattern: "*.log,*.tmp",
-			sourcePath:   "/src",
-			filePath:     "/src/cache.tmp",
-			expected:     true,
+			sourcePath:    "/src",
+			filePath:      "/src/cache.tmp",
+			expected:      true,
 		},
 		{
-			name:         "multiple patterns - no match",
+			name:          "multiple patterns - no match",
 			ignorePattern: "*.log,*.tmp",
-			sourcePath:   "/src",
-			filePath:     "/src/file.txt",
-			expected:     false,
+			sourcePath:    "/src",
+			filePath:      "/src/file.txt",
+			expected:      false,
 		},
 	}
 
@@ -580,7 +580,7 @@ func TestRootLevelGlobPatterns(t *testing.T) {
 			continue
 		}
 		t.Logf("✅ Rel(%q, %q) = %q", baseDir, file, rel)
-		
+
 		// Relative path should just be the filename for root-level patterns
 		if !strings.HasSuffix(rel, ".txt") {
 			t.Errorf("expected relative path to end with .txt, got %q", rel)
@@ -638,14 +638,14 @@ func TestProductionScenarioReproduction(t *testing.T) {
 		// This is the line that fails in production:
 		// rel, err := filepath.Rel(p.Config.Source, f)
 		// where p.Config.Source is "*.txt" and f is "/harness/op.txt"
-		
+
 		// Test old broken behavior (should fail)
 		_, err := filepath.Rel(plugin.Config.Source, file)
 		if err == nil {
 			t.Errorf("Expected old behavior to fail, but it didn't")
 			continue
 		}
-		
+
 		// Test new fixed behavior (should work)
 		baseDir := fileToSourceMap[file]
 		rel, err := filepath.Rel(baseDir, file)
@@ -653,7 +653,7 @@ func TestProductionScenarioReproduction(t *testing.T) {
 			t.Errorf("Fix failed: filepath.Rel(%q, %q) failed: %v", baseDir, file, err)
 			continue
 		}
-		
+
 		// Verify we get the expected filename
 		if rel != "op.txt" {
 			t.Errorf("expected 'op.txt', got %q", rel)
@@ -774,7 +774,7 @@ func TestHarnessProductionScenario(t *testing.T) {
 	// Simulate the exact configuration from your Harness step
 	plugin := &Plugin{
 		Config: Config{
-			Source: "*.txt", // sourcePath: '*.txt'
+			Source: "*.txt",              // sourcePath: '*.txt'
 			Target: "op-gcs-bucket/path", // bucket: op-gcs-bucket
 		},
 		printf: t.Logf,
@@ -788,7 +788,7 @@ func TestHarnessProductionScenario(t *testing.T) {
 		t.Fatalf("expandGlobPatterns failed: %v", err)
 	}
 
-	// Step 2: Collect files with source mapping  
+	// Step 2: Collect files with source mapping
 	fileToSourceMap, err := plugin.walkGlobFilesWithSources(expandedSources)
 	if err != nil {
 		t.Fatalf("walkGlobFilesWithSources failed: %v", err)
@@ -816,6 +816,141 @@ func TestHarnessProductionScenario(t *testing.T) {
 	}
 
 	// Test passed - fix is working correctly
+}
+
+// TestGlobPatternsWithIgnore tests the critical scenario where glob patterns are combined with ignore patterns
+func TestGlobPatternsWithIgnore(t *testing.T) {
+	// Create temp directory
+	tmpDir, err := os.MkdirTemp("", "glob-ignore-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test subdirectory
+	testDir := filepath.Join(tmpDir, "test")
+	if err := os.MkdirAll(testDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Change to temp directory to simulate working directory behavior
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Error(err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create test files
+	writeFile(t, testDir, "op.txt", []byte("should be included"))
+	writeFile(t, testDir, "dg.txt", []byte("should be ignored"))
+	writeFile(t, testDir, "keep.txt", []byte("should be included"))
+
+	// Test scenarios that combine glob patterns with ignore patterns
+	scenarios := []struct {
+		name          string
+		sourcePath    string
+		ignorePattern string
+		expectedFiles []string
+		ignoredFiles  []string
+	}{
+		{
+			name:          "glob pattern with single ignore",
+			sourcePath:    "test/*.txt",
+			ignorePattern: "dg.txt",
+			expectedFiles: []string{"op.txt", "keep.txt"},
+			ignoredFiles:  []string{"dg.txt"},
+		},
+		{
+			name:          "glob pattern with multiple ignores",
+			sourcePath:    "test/*.txt",
+			ignorePattern: "dg.txt,keep.txt",
+			expectedFiles: []string{"op.txt"},
+			ignoredFiles:  []string{"dg.txt", "keep.txt"},
+		},
+		{
+			name:          "glob pattern with pattern-based ignore",
+			sourcePath:    "test/*.txt",
+			ignorePattern: "*g.txt", // Matches dg.txt
+			expectedFiles: []string{"op.txt", "keep.txt"},
+			ignoredFiles:  []string{"dg.txt"},
+		},
+	}
+
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
+			plugin := &Plugin{
+				Config: Config{
+					Source: scenario.sourcePath,
+					Ignore: scenario.ignorePattern,
+				},
+				printf: t.Logf,
+			}
+
+			t.Logf("Testing: sourcePath='%s', ignore='%s'", plugin.Config.Source, plugin.Config.Ignore)
+
+			// Test the full flow that was failing
+			expandedSources, err := plugin.expandGlobPatterns(plugin.Config.Source)
+			if err != nil {
+				t.Fatalf("expandGlobPatterns failed: %v", err)
+			}
+			t.Logf("Expanded sources: %d files", len(expandedSources))
+
+			// Apply ignore filtering (this is where the bug was)
+			finalFiles, err := plugin.walkGlobFiles(expandedSources)
+			if err != nil {
+				t.Fatalf("walkGlobFiles failed: %v", err)
+			}
+
+			// Collect basenames for easier comparison
+			foundFiles := make(map[string]bool)
+			for _, file := range finalFiles {
+				basename := filepath.Base(file)
+				foundFiles[basename] = true
+				t.Logf("Found file: %s", basename)
+			}
+
+			// Verify expected files are present
+			for _, expectedFile := range scenario.expectedFiles {
+				if !foundFiles[expectedFile] {
+					t.Errorf("❌ Expected file '%s' not found", expectedFile)
+				}
+			}
+
+			// Verify ignored files are absent
+			for _, ignoredFile := range scenario.ignoredFiles {
+				if foundFiles[ignoredFile] {
+					t.Errorf("❌ File '%s' should have been ignored but was found", ignoredFile)
+				}
+			}
+
+			// Summary
+			if len(finalFiles) == len(scenario.expectedFiles) {
+				all_correct := true
+				for _, expected := range scenario.expectedFiles {
+					if !foundFiles[expected] {
+						all_correct = false
+						break
+					}
+				}
+				for _, ignored := range scenario.ignoredFiles {
+					if foundFiles[ignored] {
+						all_correct = false
+						break
+					}
+				}
+				if all_correct {
+					t.Logf("✅ SUCCESS: Ignore pattern working correctly with glob patterns!")
+				}
+			}
+		})
+	}
 }
 
 // TestAllProductionScenarios tests all the scenarios reported as failing in production
@@ -963,7 +1098,7 @@ func TestBackwardCompatibility(t *testing.T) {
 
 	plugin := &Plugin{
 		Config: Config{
-			Source: uploadDir, // Single directory path (backward compatible)
+			Source: uploadDir,   // Single directory path (backward compatible)
 			Ignore: "sub/*.bin", // Ignore pattern (backward compatible)
 		},
 		printf: t.Logf,
