@@ -129,9 +129,59 @@ func (p *Plugin) Exec(client *storage.Client) error {
 	p.printf("found %d source paths after expansion", len(expandedSources))
 
 	// Walk all expanded sources to collect files with their source directories
-	fileToSourceMap, err := p.walkGlobFilesWithSources(expandedSources)
-	if err != nil {
-		p.fatalf("failed to collect files from source patterns: %v", err)
+	// For backward compatibility, we need different logic for glob patterns vs simple directories
+	fileToSourceMap := make(map[string]string)
+	originalSource := p.Config.Source
+
+	// Check if the original source is a glob pattern
+	isGlob := isGlobPattern(originalSource)
+	
+	if isGlob {
+		// For glob patterns, use the original pattern's base directory
+		var originalBaseDir string
+		if filepath.IsAbs(originalSource) {
+			// For absolute paths, extract the directory part before any glob patterns
+			cleanPattern := strings.ReplaceAll(originalSource, "**", "")
+			cleanPattern = strings.ReplaceAll(cleanPattern, "*", "")
+			cleanPattern = strings.ReplaceAll(cleanPattern, "?", "")
+			originalBaseDir = filepath.Dir(cleanPattern)
+		} else {
+			// For relative paths, get current working directory
+			pwd, err := os.Getwd()
+			if err != nil {
+				p.fatalf("failed to get working directory: %v", err)
+			}
+			// Extract the directory part of the pattern
+			patternDir := filepath.Dir(originalSource)
+			if patternDir == "." {
+				originalBaseDir = pwd
+			} else {
+				originalBaseDir = filepath.Join(pwd, patternDir)
+			}
+		}
+		
+		// For each expanded source, walk it and map files to the original base directory
+		for _, source := range expandedSources {
+			files, err := p.walkSingleSource(source)
+			if err != nil {
+				p.fatalf("error processing source '%s': %v", source, err)
+			}
+			
+			// Map each file to the original base directory
+			for _, file := range files {
+				if _, exists := fileToSourceMap[file]; !exists {
+					fileToSourceMap[file] = originalBaseDir
+				}
+			}
+		}
+	} else {
+		// For simple directories or files, use the traditional approach
+		// This maintains backward compatibility with existing behavior
+		var err error
+		fileToSourceMap, err = p.walkGlobFilesWithSources(expandedSources)
+		if err != nil {
+			p.fatalf("failed to collect files from source patterns: %v", err)
+		}
 	}
 
 	// Extract just the file list for compatibility
@@ -146,6 +196,10 @@ func (p *Plugin) Exec(client *storage.Client) error {
 		err  error
 	}
 
+	// Detect single file upload for backward compatibility
+	singleFile := len(src) == 1 && p.isFileOnDisk(p.Config.Source)
+	targetDir := strings.TrimSuffix(p.Config.Target, "/")
+
 	// upload all files in a goroutine, maxConcurrent at a time
 	buf := make(chan struct{}, maxConcurrent)
 	res := make(chan *result, len(src))
@@ -154,17 +208,30 @@ func (p *Plugin) Exec(client *storage.Client) error {
 		buf <- struct{}{} // alloc one slot
 
 		go func(f string) {
-			// Get the correct source directory for this file
-			sourceDir := fileToSourceMap[f]
-			rel, err := filepath.Rel(sourceDir, f)
+			var dst string
 
-			if err != nil {
-				res <- &result{f, err}
-				return
+			if singleFile && !p.isDirTarget(p.Config.Target) {
+				// Single file + file-like target → exact key (LL Bean's case)
+				dst = p.Config.Target
+			} else {
+				// Directory target or multi-file → preserve nested paths
+				if singleFile {
+					// Single file + directory target → uploads/myfile.zip
+					dst = path.Join(targetDir, filepath.Base(f))
+				} else {
+					// Multi-file → preserve relative paths: uploads/lib/util.js
+					sourceDir := fileToSourceMap[f]
+					rel, err := filepath.Rel(sourceDir, f)
+					if err != nil {
+						res <- &result{f, errors.Wrapf(err, "relativizing %q", f)}
+						return
+					}
+					dst = path.Join(targetDir, rel)
+				}
 			}
 
-			err = p.uploadFile(path.Join(p.Config.Target, rel), f)
-			res <- &result{rel, err}
+			err := p.uploadFile(dst, f)
+			res <- &result{filepath.Base(f), err}
 
 			<-buf // free up
 		}(f)
@@ -406,7 +473,15 @@ func (p *Plugin) expandDoubleStarPattern(pattern string) ([]string, error) {
 		// Match against suffix pattern
 		matched := true
 		if suffixPattern != "" {
-			matched, err = filepath.Match(suffixPattern, rel)
+			// For simple patterns like *.js, match against the basename
+			// For complex patterns like dir/*.js, match against the full relative path
+			if !strings.Contains(suffixPattern, "/") {
+				// Simple pattern - match against basename only
+				matched, err = filepath.Match(suffixPattern, filepath.Base(path))
+			} else {
+				// Complex pattern - match against full relative path
+				matched, err = filepath.Match(suffixPattern, rel)
+			}
 			if err != nil {
 				return fmt.Errorf("invalid suffix pattern '%s': %w", suffixPattern, err)
 			}
@@ -690,4 +765,19 @@ func copyEnvVariableIfExists(src string, dest string) {
 	if err != nil {
 		log.Printf("Failed to copy env variable from %s to %s with error %v", src, dest, err)
 	}
+}
+
+// isFileOnDisk checks if the given path exists and is a regular file (not a directory)
+func (p *Plugin) isFileOnDisk(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// isDirTarget determines if a target path should be treated as a directory
+// Returns true if the target ends with "/" or has no file extension
+func (p *Plugin) isDirTarget(target string) bool {
+	if strings.HasSuffix(target, "/") {
+		return true
+	}
+	return filepath.Ext(target) == ""
 }

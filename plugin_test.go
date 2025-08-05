@@ -1136,3 +1136,257 @@ func TestBackwardCompatibility(t *testing.T) {
 		}
 	}
 }
+
+// TestTargetPathCompatibility tests the backward compatibility fix for target path handling
+func TestTargetPathCompatibility(t *testing.T) {
+	// Create temporary directory structure
+	tmpDir, err := os.MkdirTemp("", "drone-gcs-target-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create test files
+	writeFile(t, tmpDir, "single.zip", []byte("single file content"))
+	subDir := filepath.Join(tmpDir, "src")
+	nestedDir := filepath.Join(subDir, "lib")
+	mkdirs(t, nestedDir)
+	writeFile(t, subDir, "index.js", []byte("index"))
+	writeFile(t, nestedDir, "util.js", []byte("utility"))
+	writeFile(t, nestedDir, "helper.js", []byte("helper"))
+
+	tests := []struct {
+		name         string
+		source       string
+		target       string
+		expectedKeys []string
+		description  string
+	}{
+		{
+			name:         "LL Bean case - single file with complete target path",
+			source:       filepath.Join(tmpDir, "single.zip"),
+			target:       "harness/leep-account-payment/0.17.0/leep-account-payment_0.17.0.zip",
+			expectedKeys: []string{"harness/leep-account-payment/0.17.0/leep-account-payment_0.17.0.zip"},
+			description:  "Single file with complete path should use target as-is (historical behavior)",
+		},
+		{
+			name:         "Single file with directory target (slash)",
+			source:       filepath.Join(tmpDir, "single.zip"),
+			target:       "uploads/",
+			expectedKeys: []string{"uploads/single.zip"},
+			description:  "Single file with directory target should append filename",
+		},
+		{
+			name:         "Single file with directory target (no slash)",
+			source:       filepath.Join(tmpDir, "single.zip"),
+			target:       "uploads",
+			expectedKeys: []string{"uploads/single.zip"},
+			description:  "Single file with directory target (no extension) should append filename",
+		},
+		{
+			name:         "Multiple files with directory target",
+			source:       filepath.Join(subDir, "*.js"),
+			target:       "build/",
+			expectedKeys: []string{"build/index.js"},
+			description:  "Multiple files should preserve relative paths",
+		},
+		{
+			name:         "Nested glob pattern preserves structure",
+			source:       filepath.Join(subDir, "**/*.js"),
+			target:       "dist/js/",
+			expectedKeys: []string{"dist/js/index.js", "dist/js/lib/util.js", "dist/js/lib/helper.js"},
+			description:  "Nested glob should preserve directory structure",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			plugin := &Plugin{
+				Config: Config{
+					Source: tc.source,
+					Target: tc.target,
+				},
+				printf: t.Logf,
+			}
+
+			// Expand source patterns
+			expandedSources, err := plugin.expandGlobPatterns(tc.source)
+			if err != nil {
+				t.Fatalf("expandGlobPatterns failed: %v", err)
+			}
+
+			// Collect files with source mapping using same logic as Exec function
+			fileToSourceMap := make(map[string]string)
+			originalSource := tc.source
+			
+			// Determine base directory for the original source pattern
+			var originalBaseDir string
+			if filepath.IsAbs(originalSource) {
+				// For absolute paths, extract the directory part before any glob patterns
+				cleanPattern := strings.ReplaceAll(originalSource, "**", "")
+				cleanPattern = strings.ReplaceAll(cleanPattern, "*", "")
+				cleanPattern = strings.ReplaceAll(cleanPattern, "?", "")
+				originalBaseDir = filepath.Dir(cleanPattern)
+			} else {
+				// For relative paths, get current working directory
+				pwd, err := os.Getwd()
+				if err != nil {
+					t.Fatalf("failed to get working directory: %v", err)
+				}
+				// Extract the directory part of the pattern
+				patternDir := filepath.Dir(originalSource)
+				if patternDir == "." {
+					originalBaseDir = pwd
+				} else {
+					originalBaseDir = filepath.Join(pwd, patternDir)
+				}
+			}
+			
+			// For each expanded source, walk it and map files to the original base directory
+			for _, source := range expandedSources {
+				files, err := plugin.walkSingleSource(source)
+				if err != nil {
+					t.Fatalf("error processing source '%s': %v", source, err)
+				}
+				
+				// Map each file to the original base directory
+				for _, file := range files {
+					if _, exists := fileToSourceMap[file]; !exists {
+						fileToSourceMap[file] = originalBaseDir
+					}
+				}
+			}
+
+			// Extract file list for processing
+			src := make([]string, 0, len(fileToSourceMap))
+			for file := range fileToSourceMap {
+				src = append(src, file)
+			}
+
+			// Test the target path calculation logic
+			singleFile := len(src) == 1 && plugin.isFileOnDisk(plugin.Config.Source)
+			targetDir := strings.TrimSuffix(plugin.Config.Target, "/")
+
+			var actualKeys []string
+			for _, f := range src {
+				var dst string
+
+				if singleFile && !plugin.isDirTarget(plugin.Config.Target) {
+					// Single file + file-like target → exact key (LL Bean's case)
+					dst = plugin.Config.Target
+				} else {
+					// Directory target or multi-file → preserve nested paths
+					if singleFile {
+						// Single file + directory target → uploads/myfile.zip
+						dst = strings.Join([]string{targetDir, filepath.Base(f)}, "/")
+					} else {
+						// Multi-file → preserve relative paths: uploads/lib/util.js
+						sourceDir := fileToSourceMap[f]
+						rel, err := filepath.Rel(sourceDir, f)
+						if err != nil {
+							t.Fatalf("filepath.Rel failed: %v", err)
+						}
+						dst = strings.Join([]string{targetDir, rel}, "/")
+					}
+				}
+
+				actualKeys = append(actualKeys, dst)
+			}
+
+			// Sort for consistent comparison
+			for i := 0; i < len(actualKeys); i++ {
+				for j := i + 1; j < len(actualKeys); j++ {
+					if actualKeys[i] > actualKeys[j] {
+						actualKeys[i], actualKeys[j] = actualKeys[j], actualKeys[i]
+					}
+				}
+			}
+			expectedKeysCopy := make([]string, len(tc.expectedKeys))
+			copy(expectedKeysCopy, tc.expectedKeys)
+			for i := 0; i < len(expectedKeysCopy); i++ {
+				for j := i + 1; j < len(expectedKeysCopy); j++ {
+					if expectedKeysCopy[i] > expectedKeysCopy[j] {
+						expectedKeysCopy[i], expectedKeysCopy[j] = expectedKeysCopy[j], expectedKeysCopy[i]
+					}
+				}
+			}
+
+			// Verify results
+			if len(actualKeys) != len(expectedKeysCopy) {
+				t.Errorf("Expected %d keys, got %d", len(expectedKeysCopy), len(actualKeys))
+				t.Errorf("Expected: %v", expectedKeysCopy)
+				t.Errorf("Actual: %v", actualKeys)
+				return
+			}
+
+			for i, expected := range expectedKeysCopy {
+				if actualKeys[i] != expected {
+					t.Errorf("Key %d: expected %q, got %q", i, expected, actualKeys[i])
+				}
+			}
+
+			t.Logf("✅ %s: %s", tc.name, tc.description)
+			for i, key := range actualKeys {
+				t.Logf("  %d. %s", i+1, key)
+			}
+		})
+	}
+}
+
+// TestHelperFunctions tests the helper functions for target detection
+func TestHelperFunctions(t *testing.T) {
+	// Create temporary test file
+	tmpDir, err := os.MkdirTemp("", "helper-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	testFile := filepath.Join(tmpDir, "test.txt")
+	writeFile(t, tmpDir, "test.txt", []byte("test"))
+
+	plugin := &Plugin{}
+
+	// Test isFileOnDisk
+	isFileTests := []struct {
+		path     string
+		expected bool
+		desc     string
+	}{
+		{testFile, true, "existing file should return true"},
+		{tmpDir, false, "directory should return false"},
+		{"/nonexistent", false, "nonexistent path should return false"},
+	}
+
+	for _, tc := range isFileTests {
+		t.Run(tc.desc, func(t *testing.T) {
+			result := plugin.isFileOnDisk(tc.path)
+			if result != tc.expected {
+				t.Errorf("isFileOnDisk(%q) = %v; want %v", tc.path, result, tc.expected)
+			}
+		})
+	}
+
+	// Test isDirTarget
+	isDirTests := []struct {
+		target   string
+		expected bool
+		desc     string
+	}{
+		{"uploads/", true, "path ending with slash should be directory"},
+		{"uploads", true, "path without extension should be directory"},
+		{"bucket/path", true, "multi-level path without extension should be directory"},
+		{"bucket/file.zip", false, "path with extension should be file"},
+		{"bucket/path/file.tar.gz", false, "path with complex extension should be file"},
+		{"bucket.v2/path", true, "directory with dot should still be directory"},
+	}
+
+	for _, tc := range isDirTests {
+		t.Run(tc.desc, func(t *testing.T) {
+			result := plugin.isDirTarget(tc.target)
+			if result != tc.expected {
+				t.Errorf("isDirTarget(%q) = %v; want %v", tc.target, result, tc.expected)
+			}
+		})
+	}
+}
