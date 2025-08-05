@@ -452,8 +452,95 @@ func TestWalkGlobFiles(t *testing.T) {
 	}
 }
 
+func TestTargetPathFix(t *testing.T) {
+	// Test single file upload with complete target path
+	tmpDir, err := os.MkdirTemp("", "target-path-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a test file
+	testFile := filepath.Join(tmpDir, "test.zip")
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test with file-like target (complete path case)
+	plugin := &Plugin{
+		Config: Config{
+			Source: testFile,
+			Target: "project/service-name/1.0.0/service-name_1.0.0.zip",
+		},
+		printf: t.Logf,
+	}
+
+	// Verify helper functions work correctly
+	if !plugin.isFileOnDisk(testFile) {
+		t.Error("should detect test file on disk")
+	}
+
+	if plugin.isDirTarget(plugin.Config.Target) {
+		t.Error("complete file path target should be detected as file path")
+	}
+
+	if !plugin.isDirTarget("uploads/") {
+		t.Error("directory with slash should be detected as directory")
+	}
+
+	t.Log("✅ Target path fix helpers working correctly")
+}
+
+func TestCrossPlatformPaths(t *testing.T) {
+	
+	// Test that filepath.IsAbs is used correctly for different platforms
+	tests := []struct {
+		name string
+		path string
+		wantAbs bool
+	}{
+		{"Unix absolute", "/home/user/file.txt", true},
+		{"Unix relative", "user/file.txt", false},
+		{"Windows absolute C:", `C:\Users\file.txt`, true},
+		{"Windows absolute UNC", `\\server\share\file.txt`, true},
+		{"Windows relative", `Users\file.txt`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isAbsolutePath(tt.path)
+			if got != tt.wantAbs {
+				t.Errorf("isAbsolutePath(%q) = %v, want %v", tt.path, got, tt.wantAbs)
+			}
+		})
+	}
+
+	t.Log("✅ Cross-platform absolute path detection working")
+}
+
+func TestHelperFunctions(t *testing.T) {
+	plugin := &Plugin{}
+
+	if plugin.isFileOnDisk("non-existent-file") {
+		t.Error("non-existent file should not be detected as file")
+	}
+
+	if !plugin.isDirTarget("uploads/") {
+		t.Error("path ending with slash should be directory")
+	}
+
+	if !plugin.isDirTarget("uploads") {
+		t.Error("path without extension should be directory")
+	}
+
+	if plugin.isDirTarget("file.zip") {
+		t.Error("path with extension should be file")
+	}
+}
+
 // TestShouldIgnoreFile tests ignore pattern functionality
 func TestShouldIgnoreFile(t *testing.T) {
+	// ... (rest of the code remains the same)
 	tests := []struct {
 		name          string
 		ignorePattern string
