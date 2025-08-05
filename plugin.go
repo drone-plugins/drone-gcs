@@ -140,6 +140,8 @@ func (p *Plugin) Exec(client *storage.Client) error {
 		src = append(src, file)
 	}
 
+	singleFile := len(src) == 1 && p.isFileOnDisk(p.Config.Source)
+
 	// result contains upload result of a single file
 	type result struct {
 		name string
@@ -163,7 +165,14 @@ func (p *Plugin) Exec(client *storage.Client) error {
 				return
 			}
 
-			err = p.uploadFile(path.Join(p.Config.Target, rel), f)
+			var dst string
+			if singleFile && !p.isDirTarget(p.Config.Target) {
+				dst = p.Config.Target
+			} else {
+				dst = path.Join(p.Config.Target, rel)
+			}
+
+			err = p.uploadFile(dst, f)
 			res <- &result{rel, err}
 
 			<-buf // free up
@@ -291,6 +300,41 @@ func isGlobPattern(path string) bool {
 	return strings.ContainsAny(path, "*?[]") || strings.Contains(path, "**")
 }
 
+// isFileOnDisk checks if the given path exists and is a file on disk
+func (p *Plugin) isFileOnDisk(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+// isDirTarget determines if the target should be treated as a directory
+// Returns true if target ends with / or has no file extension
+func (p *Plugin) isDirTarget(target string) bool {
+	target = filepath.Clean(target)
+	return strings.HasSuffix(target, "/") || filepath.Ext(target) == ""
+}
+
+// isAbsolutePath checks if a path is absolute on any platform (Unix or Windows)
+func isAbsolutePath(path string) bool {
+	// Use filepath.IsAbs which handles current OS correctly
+	if filepath.IsAbs(path) {
+		return true
+	}
+
+	// Additionally check for Windows-style paths on non-Windows systems
+	// This ensures cross-platform compatibility
+	if len(path) >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/') {
+		// C:\ or C:/ style paths
+		return true
+	}
+
+	// UNC paths \\server\share
+	if len(path) >= 2 && path[0] == '\\' && path[1] == '\\' {
+		return true
+	}
+
+	return false
+}
+
 // expandGlobPatterns expands glob patterns and comma-separated paths into a list of actual paths
 func (p *Plugin) expandGlobPatterns(patterns string) ([]string, error) {
 	if patterns == "" {
@@ -325,8 +369,8 @@ func (p *Plugin) expandGlobPatterns(patterns string) ([]string, error) {
 
 // expandSinglePattern expands a single glob pattern or returns the path as-is if not a glob
 func (p *Plugin) expandSinglePattern(pattern string) ([]string, error) {
-	// Convert to absolute path if relative
-	if !filepath.IsAbs(pattern) {
+	// Convert to absolute path if relative (cross-platform)
+	if !isAbsolutePath(pattern) {
 		pwd, err := os.Getwd()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get working directory: %w", err)
@@ -477,7 +521,7 @@ func (p *Plugin) walkGlobFilesWithSources(sources []string) (map[string]string, 
 
 		// Ensure source is absolute first
 		absSource := source
-		if !filepath.IsAbs(source) {
+		if !isAbsolutePath(source) {
 			var err error
 			absSource, err = filepath.Abs(source)
 			if err != nil {
@@ -500,7 +544,7 @@ func (p *Plugin) walkGlobFilesWithSources(sources []string) (map[string]string, 
 		}
 
 		// Ensure baseDir is absolute for consistent relative path calculation
-		if !filepath.IsAbs(baseDir) {
+		if !isAbsolutePath(baseDir) {
 			baseDir = filepath.Join(pwd, baseDir)
 		}
 
@@ -570,7 +614,6 @@ func (p *Plugin) walkSingleSource(sourcePath string) ([]string, error) {
 }
 
 // shouldIgnoreFile checks if a file should be ignored based on the ignore pattern
-// It maintains backward compatibility with the original ignore logic
 func (p *Plugin) shouldIgnoreFile(sourcePath string, filePath string) bool {
 	if p.Config.Ignore == "" {
 		return false
