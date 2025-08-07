@@ -306,11 +306,10 @@ func (p *Plugin) isFileOnDisk(path string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// isDirTarget determines if the target should be treated as a directory
-// Returns true if target ends with / or has no file extension
+// isDirTarget determines if the target should be treated as a directory.
+// On GCS we only care about a literal '/' suffix.
 func (p *Plugin) isDirTarget(target string) bool {
-	target = filepath.Clean(target)
-	return strings.HasSuffix(target, "/") || filepath.Ext(target) == ""
+	return strings.HasSuffix(target, "/")
 }
 
 // isAbsolutePath checks if a path is absolute on any platform (Unix or Windows)

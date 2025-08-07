@@ -492,11 +492,11 @@ func TestTargetPathFix(t *testing.T) {
 }
 
 func TestCrossPlatformPaths(t *testing.T) {
-	
+
 	// Test that filepath.IsAbs is used correctly for different platforms
 	tests := []struct {
-		name string
-		path string
+		name    string
+		path    string
 		wantAbs bool
 	}{
 		{"Unix absolute", "/home/user/file.txt", true},
@@ -529,8 +529,8 @@ func TestHelperFunctions(t *testing.T) {
 		t.Error("path ending with slash should be directory")
 	}
 
-	if !plugin.isDirTarget("uploads") {
-		t.Error("path without extension should be directory")
+	if plugin.isDirTarget("uploads") {
+		t.Error("path without slash should be file")
 	}
 
 	if plugin.isDirTarget("file.zip") {
@@ -540,7 +540,6 @@ func TestHelperFunctions(t *testing.T) {
 
 // TestShouldIgnoreFile tests ignore pattern functionality
 func TestShouldIgnoreFile(t *testing.T) {
-	// ... (rest of the code remains the same)
 	tests := []struct {
 		name          string
 		ignorePattern string
