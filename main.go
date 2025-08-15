@@ -164,7 +164,7 @@ func run(c *cli.Context) error {
 	} else if plugin.Config.Token != "" {
 		client, err = gcsClientWithToken(plugin.Config.Token)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "token value is "+plugin.Config.Token)
 		}
 	} else if c.String("json-key") != "" {
 		err := os.MkdirAll(os.TempDir(), 0600)
