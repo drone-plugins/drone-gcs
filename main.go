@@ -161,11 +161,6 @@ func run(c *cli.Context) error {
 		if err != nil {
 			return err
 		}
-	} else if plugin.Config.Token != "" {
-		client, err = gcsClientWithToken(plugin.Config.Token)
-		if err != nil {
-			return err
-		}
 	} else if c.String("json-key") != "" {
 		err := os.MkdirAll(os.TempDir(), 0600)
 		if err != nil {
@@ -179,6 +174,11 @@ func run(c *cli.Context) error {
 		defer os.Remove(tmpfile.Name()) // clean up
 
 		client, err = gcsClientWithJSONKey(c.String("json-key"), tmpfile)
+		if err != nil {
+			return err
+		}
+	} else if plugin.Config.Token != "" {
+		client, err = gcsClientWithToken(plugin.Config.Token)
 		if err != nil {
 			return err
 		}
