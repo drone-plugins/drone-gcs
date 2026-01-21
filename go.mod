@@ -1,6 +1,6 @@
 module github.com/drone-plugins/drone-gcs
 
-go 1.22.7
+go 1.24.11
 
 require (
 	cloud.google.com/go/storage v1.31.0
