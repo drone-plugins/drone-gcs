@@ -74,7 +74,7 @@ pipeline:
                       identifier: Run_1
                       spec:
                         connectorRef: Plugins_Docker_Hub_Connector
-                        image: golang:1.22.7
+                        image: golang:1.24.11
                         shell: Sh
                         command: |-
                           # force go modules
@@ -148,7 +148,7 @@ pipeline:
                       name: Build Binary
                       spec:
                         connectorRef: Plugins_Docker_Hub_Connector
-                        image: golang:1.22.7
+                        image: golang:1.24.11
                         shell: Sh
                         command: |-
                           # force go modules
@@ -219,7 +219,7 @@ pipeline:
                       name: Build Binary
                       spec:
                         connectorRef: Plugins_Docker_Hub_Connector
-                        image: golang:1.22.7
+                        image: golang:1.23.0
                         shell: Sh
                         command: |-
                           # force go modules
@@ -284,7 +284,7 @@ pipeline:
                       name: Build Binary
                       spec:
                         connectorRef: Plugins_Docker_Hub_Connector
-                        image: golang:1.22.7
+                        image: golang:1.23.0
                         shell: Sh
                         command: |-
                           # force go modules
