@@ -1,6 +1,6 @@
 module github.com/drone-plugins/drone-gcs
 
-go 1.24.11
+go 1.25.7
 
 require (
 	cloud.google.com/go/storage v1.31.0
@@ -35,6 +35,6 @@ require (
 	google.golang.org/genproto v0.0.0-20230717213848-3f92550aa753 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230717213848-3f92550aa753 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20230717213848-3f92550aa753 // indirect
-	google.golang.org/grpc v1.56.2 // indirect
+	google.golang.org/grpc v1.58.3 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 )
