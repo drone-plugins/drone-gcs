@@ -9,7 +9,6 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/drone-plugins/drone-gcs/internal/gcp"
-	"github.com/pkg/errors"
 	"github.com/urfave/cli"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -138,7 +137,7 @@ func run(c *cli.Context) error {
 		var metadata map[string]string
 
 		if err := json.Unmarshal([]byte(m), &metadata); err != nil {
-			return errors.Wrap(err, "error parsing metadata field")
+			return fmt.Errorf("error parsing metadata field: %w", err)
 		}
 
 		plugin.Config.Metadata = metadata
@@ -146,12 +145,12 @@ func run(c *cli.Context) error {
 
 	if !plugin.Config.Download {
 		if plugin.Config.Target == "" {
-			return errors.New("Missing target")
+			return fmt.Errorf("Missing target")
 		}
 	}
 
 	if plugin.Config.Source == "" {
-		return errors.New("Missing source")
+		return fmt.Errorf("Missing source")
 	}
 
 	var client *storage.Client
@@ -169,12 +168,12 @@ func run(c *cli.Context) error {
 	} else if c.String("json-key") != "" {
 		err := os.MkdirAll(os.TempDir(), 0600)
 		if err != nil {
-			return errors.Wrap(err, "failed to create temporary directory")
+			return fmt.Errorf("failed to create temporary directory: %w", err)
 		}
 
 		tmpfile, err := os.CreateTemp("", "")
 		if err != nil {
-			return errors.Wrap(err, "failed to create temporary file")
+			return fmt.Errorf("failed to create temporary file: %w", err)
 		}
 		defer os.Remove(tmpfile.Name()) // clean up
 
@@ -195,29 +194,29 @@ func run(c *cli.Context) error {
 func gcsClientWithToken(token string) (*storage.Client, error) {
 	auth, err := google.JWTConfigFromJSON([]byte(token), storage.ScopeFullControl)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to authenticate token")
+		return nil, fmt.Errorf("failed to authenticate token: %w", err)
 	}
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithTokenSource(auth.TokenSource(ctx)))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize storage")
+		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
 	return client, nil
 }
 
 func gcsClientWithJSONKey(jsonKey string, credFile *os.File) (*storage.Client, error) {
 	if _, err := credFile.Write([]byte(jsonKey)); err != nil {
-		return nil, errors.Wrap(err, "failed to write gcs credentials to file")
+		return nil, fmt.Errorf("failed to write gcs credentials to file: %w", err)
 	}
 	if err := credFile.Close(); err != nil {
-		return nil, errors.Wrap(err, "failed to close gcs credentials file")
+		return nil, fmt.Errorf("failed to close gcs credentials file: %w", err)
 	}
 
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFile.Name()))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize storage")
+		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
 	return client, nil
 }
@@ -226,7 +225,7 @@ func gcsClientApplicationDefaultCredentials() (*storage.Client, error) {
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize storage")
+		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
 	return client, nil
 }
@@ -248,7 +247,7 @@ func gcsClientWithOIDC(workloadPoolId string, providerId string, gcpProjectId st
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx, option.WithTokenSource(tokenSource))
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize storage")
+		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
 	return client, nil
 }

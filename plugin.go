@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/pkg/errors"
 	"google.golang.org/api/iterator"
 )
 
@@ -123,7 +122,7 @@ func (p *Plugin) Exec(client *storage.Client) error {
 	// Expand glob patterns into actual source paths
 	expandedSources, err := p.expandGlobPatterns(p.Config.Source)
 	if err != nil {
-		return errors.Wrap(err, "failed to expand source patterns")
+		return fmt.Errorf("failed to expand source patterns: %w", err)
 	}
 
 	p.printf("found %d source paths after expansion", len(expandedSources))
@@ -667,27 +666,27 @@ func (p *Plugin) downloadObject(ctx context.Context, objAttrs *storage.ObjectAtt
 
 	// Create the directory and any necessary parent directories
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-		return errors.Wrap(err, "error creating directories")
+		return fmt.Errorf("error creating directories: %w", err)
 	}
 
 	// Create a file to write the downloaded object
 	file, err := os.Create(destination)
 	if err != nil {
-		return errors.Wrap(err, "error creating destination file")
+		return fmt.Errorf("error creating destination file: %w", err)
 	}
 	defer file.Close()
 
 	// Open the GCS object for reading
 	reader, err := p.bucket.Object(objAttrs.Name).NewReader(ctx)
 	if err != nil {
-		return errors.Wrap(err, "error opening GCS object for reading")
+		return fmt.Errorf("error opening GCS object for reading: %w", err)
 	}
 	defer reader.Close()
 
 	// Copy the contents of the GCS object to the local file
 	_, err = io.Copy(file, reader)
 	if err != nil {
-		return errors.Wrap(err, "error copying GCS object contents to local file")
+		return fmt.Errorf("error copying GCS object contents to local file: %w", err)
 	}
 
 	return nil
@@ -706,7 +705,7 @@ func (p *Plugin) downloadObjects(ctx context.Context, query *storage.Query) erro
 		}
 
 		if err != nil {
-			return errors.Wrap(err, "error while iterating through GCS objects")
+			return fmt.Errorf("error while iterating through GCS objects: %w", err)
 		}
 
 		if err := p.downloadObject(ctx, objAttrs); err != nil {
