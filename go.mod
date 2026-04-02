@@ -5,7 +5,6 @@ go 1.25.7
 require (
 	cloud.google.com/go/storage v1.50.0
 	github.com/urfave/cli v1.22.14
-	golang.org/x/net v0.48.0
 	golang.org/x/oauth2 v0.34.0
 	google.golang.org/api v0.214.0
 )
@@ -49,6 +48,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
 	go.opentelemetry.io/otel/trace v1.40.0 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
