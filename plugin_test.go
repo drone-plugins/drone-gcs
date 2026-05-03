@@ -1164,6 +1164,61 @@ func TestAllProductionScenarios(t *testing.T) {
 	}
 }
 
+// TestRunEmptyTargetSingleFile verifies that when Target is empty and source is a single
+// file, the file is uploaded using its original filename (not an empty object name).
+// This is a fix for: googleapi: Error 400: No object name, required
+func TestRunEmptyTargetSingleFile(t *testing.T) {
+	wdir, err := os.MkdirTemp("", "drone-gcs-empty-target-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(wdir)
+
+	writeFile(t, wdir, "artifact.txt", []byte("content"))
+
+	var uploadedName string
+
+	rt := &fakeTransport{func(r *http.Request) (*http.Response, error) {
+		uploadedName = r.URL.Query().Get("name")
+		return &http.Response{
+			Body:       io.NopCloser(strings.NewReader(`{"name": "artifact.txt"}`)),
+			Proto:      "HTTP/1.0",
+			ProtoMajor: 1,
+			ProtoMinor: 0,
+			StatusCode: http.StatusOK,
+		}, nil
+	}}
+
+	hc := &http.Client{Transport: rt}
+	client, _ := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
+
+	p := &Plugin{
+		Config: Config{
+			Source: filepath.Join(wdir, "artifact.txt"),
+			Target: "my-bucket",
+		},
+		printf: t.Logf,
+		fatalf: t.Fatalf,
+	}
+	p.bucket = client.Bucket("my-bucket")
+
+	// Simulate what Exec() does: split target to get bucket name and path
+	tgt := strings.SplitN(p.Config.Target, "/", 2)
+	if len(tgt) == 1 {
+		p.Config.Target = ""
+	} else {
+		p.Config.Target = tgt[1]
+	}
+
+	if err := p.Exec(client); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+
+	if uploadedName != "artifact.txt" {
+		t.Errorf("uploaded object name = %q, want %q", uploadedName, "artifact.txt")
+	}
+}
+
 // TestBackwardCompatibility tests that existing functionality still works
 func TestBackwardCompatibility(t *testing.T) {
 	// Create temporary directory structure
