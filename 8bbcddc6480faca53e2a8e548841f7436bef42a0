@@ -1,0 +1,43 @@
+plugin.go
+  c1291077-f044-4551-8900-8568a2a66c42 167-173
+---
+{
+  "attestations": [
+    {
+      "entries": [
+        {
+          "accepted_lines": 7,
+          "added_lines": 8,
+          "deleted_lines": 7,
+          "hash": "c1291077-f044-4551-8900-8568a2a66c42",
+          "lines": "167-173",
+          "overridden_lines": 0
+        }
+      ],
+      "file": "plugin.go"
+    }
+  ],
+  "base_commit_sha": "7c02da91ab2af94ac9a4365538e0c7dcde947210",
+  "branch": "fix-missing-objectName-for-uploadGCS-empty-target-value",
+  "commit_sha": "8bbcddc6480faca53e2a8e548841f7436bef42a0",
+  "commit_time": "2026-05-08T18:38:24+05:30",
+  "commit_type": "direct_commit",
+  "git_ai_version": "1.4.2",
+  "prompts": {
+    "c1291077-f044-4551-8900-8568a2a66c42": {
+      "accepted_lines": 7,
+      "agent_id": {
+        "id": "c1291077-f044-4551-8900-8568a2a66c42",
+        "model": "claude-4.6-sonnet-medium-thinking",
+        "tool": "cursor"
+      },
+      "human_author": "Gargithakur01 <gargi@harness.io>",
+      "messages": [],
+      "overriden_lines": 0,
+      "total_additions": 8,
+      "total_deletions": 7
+    }
+  },
+  "repo": "https://github.com/drone-plugins/drone-gcs.git",
+  "schema_version": "authorship/3.0.0"
+}
