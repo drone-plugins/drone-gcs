@@ -167,6 +167,9 @@ func (p *Plugin) Exec(client *storage.Client) error {
 			var dst string
 			if singleFile && !p.isDirTarget(p.Config.Target) {
 				dst = p.Config.Target
+				if dst == "" {
+					dst = rel
+				}
 			} else {
 				dst = path.Join(p.Config.Target, rel)
 			}
