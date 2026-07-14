@@ -1,0 +1,18 @@
+# escape=`
+
+# ---------------------------------------------------------------------------
+# drone-gcs for Windows Server 2025 (LTSC 2025)
+# ---------------------------------------------------------------------------
+
+FROM plugins/base:windows-ltsc2025-amd64
+USER ContainerAdministrator
+
+ENV GODEBUG=netdns=go
+
+LABEL maintainer="Drone.IO Community <drone-dev@googlegroups.com>" `
+  org.label-schema.name="Drone GCS" `
+  org.label-schema.vendor="Drone.IO Community" `
+  org.label-schema.schema-version="1.0"
+
+ADD release/windows/amd64/drone-gcs.exe C:/drone-gcs.exe
+ENTRYPOINT [ "C:\\drone-gcs.exe" ]
