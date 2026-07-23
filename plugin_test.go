@@ -51,7 +51,7 @@ func gunzip(t *testing.T, bz []byte) []byte {
 		t.Errorf("gunzip NewReader: %v", err)
 		return bz
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	b, err := io.ReadAll(r)
 	if err != nil {
 		t.Errorf("gunzip read: %v", err)
@@ -353,7 +353,7 @@ func TestExpandGlobPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test structure
 	testDir := filepath.Join(tmpDir, "test")
@@ -437,7 +437,7 @@ func TestWalkGlobFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test structure
 	dir1 := filepath.Join(tmpDir, "dir1")
@@ -470,7 +470,7 @@ func TestTargetPathFix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.zip")
@@ -626,7 +626,7 @@ func TestRootLevelGlobPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp directory to simulate real scenario
 	oldDir, err := os.Getwd()
@@ -693,7 +693,7 @@ func TestProductionScenarioReproduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp directory
 	oldDir, err := os.Getwd()
@@ -766,7 +766,7 @@ func TestEndToEndRootLevelGlob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp directory (simulate /harness)
 	oldDir, err := os.Getwd()
@@ -850,7 +850,7 @@ func TestHarnessProductionScenario(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp directory to simulate /harness working directory
 	oldDir, err := os.Getwd()
@@ -923,7 +923,7 @@ func TestGlobPatternsWithIgnore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test subdirectory
 	testDir := filepath.Join(tmpDir, "test")
@@ -1058,7 +1058,7 @@ func TestAllProductionScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create subdirectory for testing
 	testDir := filepath.Join(tmpDir, "test")
@@ -1238,7 +1238,7 @@ func TestBackwardCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test structure similar to original tests
 	uploadDir := filepath.Join(tmpDir, "upload")

@@ -212,7 +212,7 @@ func (p *Plugin) uploadFile(dst, file string) error {
 		return err
 	}
 
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	w := p.bucket.Object(dst).NewWriter(context.Background())
 	w.CacheControl = p.Config.CacheControl
@@ -277,7 +277,7 @@ func (p *Plugin) gzipper(file string) (io.ReadCloser, bool, error) {
 			p.errorf("%s: pipe: %v", file, err)
 		}
 
-		r.Close()
+		_ = r.Close()
 	}()
 	return pr, true, nil
 }
@@ -677,14 +677,14 @@ func (p *Plugin) downloadObject(ctx context.Context, objAttrs *storage.ObjectAtt
 	if err != nil {
 		return fmt.Errorf("error creating destination file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Open the GCS object for reading
 	reader, err := p.bucket.Object(objAttrs.Name).NewReader(ctx)
 	if err != nil {
 		return fmt.Errorf("error opening GCS object for reading: %w", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	// Copy the contents of the GCS object to the local file
 	_, err = io.Copy(file, reader)

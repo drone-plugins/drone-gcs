@@ -145,12 +145,12 @@ func run(c *cli.Context) error {
 
 	if !plugin.Config.Download {
 		if plugin.Config.Target == "" {
-			return fmt.Errorf("Missing target")
+			return fmt.Errorf("missing target")
 		}
 	}
 
 	if plugin.Config.Source == "" {
-		return fmt.Errorf("Missing source")
+		return fmt.Errorf("missing source")
 	}
 
 	var client *storage.Client
