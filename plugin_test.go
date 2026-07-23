@@ -1184,7 +1184,7 @@ func TestRunEmptyTargetSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(wdir)
+	defer func() { _ = os.RemoveAll(wdir) }()
 
 	writeFile(t, wdir, "artifact.txt", []byte("content"))
 
