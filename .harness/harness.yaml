@@ -864,6 +864,8 @@ pipeline:
                       spec:
                         sourcePath: /harness/release
                         target: drone-gcs/<+trigger.tag>/
+                      when:
+                        condition: <+input>
                   when:
                     stageStatus: Success
                     condition: <+codebase.build.type> == "tag"
