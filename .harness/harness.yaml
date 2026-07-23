@@ -794,7 +794,7 @@ pipeline:
                   when:
                     stageStatus: Success
                     condition: |
-                      <+codebase.build.type> == "tag" || "branch"
+                      <+codebase.build.type> == "tag" || <+codebase.build.type> == "branch"
               - step:
                   type: Plugin
                   name: RF Manifest
@@ -811,7 +811,7 @@ pipeline:
                   when:
                     stageStatus: Success
                     condition: |
-                      <+codebase.build.type> == "tag" || "branch"
+                      <+codebase.build.type> == "tag" || <+codebase.build.type> == "branch"
               - step:
                   type: Run
                   name: build binaries
@@ -864,8 +864,9 @@ pipeline:
                       spec:
                         sourcePath: /harness/release
                         target: drone-gcs/<+trigger.tag>/
-                      when:
-                        condition: <+codebase.build.type> == "tag"
+                  when:
+                    stageStatus: Success
+                    condition: <+codebase.build.type> == "tag"
         variables:
           - name: DRONE_REPO_OWNER
             type: String
