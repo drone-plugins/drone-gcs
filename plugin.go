@@ -3,6 +3,8 @@ package main
 import (
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -19,6 +21,68 @@ import (
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 )
+
+// artifactFile is the fileUpload/v1 JSON structure expected by CI manager.
+type artifactFile struct {
+	Kind string           `json:"kind"`
+	Data artifactFileData `json:"data"`
+}
+
+type artifactFileData struct {
+	FileArtifacts []fileArtifactEntry `json:"fileArtifacts"`
+}
+
+type fileArtifactEntry struct {
+	Name       string `json:"name"`
+	URL        string `json:"url"`
+	FilePath   string `json:"filePath"`
+	BucketName string `json:"bucketName"`
+	Digest     string `json:"digest,omitempty"`
+}
+
+// writeArtifactFile writes uploaded file metadata to $PLUGIN_ARTIFACT_FILE so
+// CI manager can pick it up. Failures are logged as warnings; the step is never
+// failed because of this.
+func writeArtifactFile(entries []fileArtifactEntry) {
+	path := os.Getenv("PLUGIN_ARTIFACT_FILE")
+	if path == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		log.Printf("Warning: failed to create artifact file directory %s: %v", filepath.Dir(path), err)
+		return
+	}
+	payload := artifactFile{
+		Kind: "fileUpload/v1",
+		Data: artifactFileData{FileArtifacts: entries},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Warning: failed to marshal artifact metadata: %v", err)
+		return
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		log.Printf("Warning: failed to write artifact file %s: %v", path, err)
+	}
+}
+
+// computeFileSHA256 reads the local file and returns "sha256:<hex>".
+// On any failure it logs a warning and returns an empty string so the upload
+// step itself is never failed.
+func computeFileSHA256(filePath string) string {
+	f, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("Warning: could not open %s for sha256 computation: %v", filePath, err)
+		return ""
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		log.Printf("Warning: sha256 computation failed for %s: %v", filePath, err)
+		return ""
+	}
+	return fmt.Sprintf("sha256:%x", h.Sum(nil))
+}
 
 type (
 	Config struct {
@@ -141,10 +205,11 @@ func (p *Plugin) Exec(client *storage.Client) error {
 
 	singleFile := len(src) == 1 && p.isFileOnDisk(p.Config.Source)
 
-	// result contains upload result of a single file
+	// result contains the upload result of a single file.
 	type result struct {
-		name string
-		err  error
+		name     string
+		err      error
+		artifact fileArtifactEntry
 	}
 
 	// upload all files in a goroutine, maxConcurrent at a time
@@ -160,7 +225,7 @@ func (p *Plugin) Exec(client *storage.Client) error {
 			rel, err := filepath.Rel(sourceDir, f)
 
 			if err != nil {
-				res <- &result{f, err}
+				res <- &result{name: f, err: err}
 				return
 			}
 
@@ -174,14 +239,22 @@ func (p *Plugin) Exec(client *storage.Client) error {
 				dst = path.Join(p.Config.Target, rel)
 			}
 
-			err = p.uploadFile(dst, f)
-			res <- &result{rel, err}
+			digest, err := p.uploadFile(dst, f)
+			entry := fileArtifactEntry{
+				Name:       filepath.Base(dst),
+				URL:        fmt.Sprintf("https://storage.googleapis.com/%s/%s", bname, dst),
+				FilePath:   dst,
+				BucketName: bname,
+				Digest:     digest,
+			}
+			res <- &result{name: rel, err: err, artifact: entry}
 
 			<-buf // free up
 		}(f)
 	}
 
-	// wait for all files to be uploaded or stop at first error
+	// Wait for all uploads; collect metadata for successfully uploaded files.
+	var artifacts []fileArtifactEntry
 	for range src {
 		r := <-res
 
@@ -189,7 +262,13 @@ func (p *Plugin) Exec(client *storage.Client) error {
 			p.fatalf("%s: %v", r.name, r.err)
 		}
 
+		artifacts = append(artifacts, r.artifact)
 		p.printf(r.name)
+	}
+
+	// Write artifact metadata (soft-fail — never fails the step).
+	if len(artifacts) > 0 {
+		writeArtifactFile(artifacts)
 	}
 
 	return nil
@@ -203,15 +282,18 @@ func (p *Plugin) errorf(format string, args ...interface{}) {
 	p.printf(format, args...)
 }
 
-// uploadFile uploads the file to dst using global bucket.
-// To get a more robust upload use retryUpload instead.
-func (p *Plugin) uploadFile(dst, file string) error {
+// uploadFile uploads the file to dst using global bucket and returns the
+// sha256 digest of the local source file ("sha256:<hex>") plus any error.
+// Digest computation is best-effort: an empty string is returned on failure
+// without failing the upload itself.
+func (p *Plugin) uploadFile(dst, file string) (string, error) {
+	// Hash the local file before streaming to GCS (soft-fail).
+	digest := computeFileSHA256(file)
+
 	r, gz, err := p.gzipper(file)
-
 	if err != nil {
-		return err
+		return "", err
 	}
-
 	defer r.Close()
 
 	w := p.bucket.Object(dst).NewWriter(context.Background())
@@ -222,7 +304,7 @@ func (p *Plugin) uploadFile(dst, file string) error {
 		a := strings.SplitN(s, ":", 2)
 
 		if len(a) != 2 {
-			return fmt.Errorf("%s: invalid ACL %q", dst, s)
+			return "", fmt.Errorf("%s: invalid ACL %q", dst, s)
 		}
 
 		w.ACL = append(w.ACL, storage.ACLRule{
@@ -242,10 +324,10 @@ func (p *Plugin) uploadFile(dst, file string) error {
 	}
 
 	if _, err := io.Copy(w, r); err != nil {
-		return err
+		return "", err
 	}
 
-	return w.Close()
+	return digest, w.Close()
 }
 
 // gzipper returns a stream of file and a boolean indicating
