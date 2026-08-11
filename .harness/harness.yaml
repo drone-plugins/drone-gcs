@@ -36,10 +36,11 @@ pipeline:
                   identifier: lint
                   spec:
                     connectorRef: Plugins_Docker_Hub_Connector
-                    image: golang:1.25.12
+                    image: golang:1.26
                     shell: Sh
                     command: |-
-                      go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+                      curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.10.1
+                      export PATH="$(go env GOPATH)/bin:$PATH"
                       golangci-lint version
                       golangci-lint run
               - step:
@@ -48,7 +49,7 @@ pipeline:
                   identifier: Run_1
                   spec:
                     connectorRef: Plugins_Docker_Hub_Connector
-                    image: golang:1.25.12
+                    image: golang:1.26
                     shell: Sh
                     command: go test -cover ./...
     - parallel:
@@ -76,7 +77,7 @@ pipeline:
                       identifier: Run_1
                       spec:
                         connectorRef: Plugins_Docker_Hub_Connector
-                        image: golang:1.25.12
+                        image: golang:1.26
                         shell: Sh
                         command: |-
                           # force go modules
@@ -150,7 +151,7 @@ pipeline:
                       name: Build Binary
                       spec:
                         connectorRef: Plugins_Docker_Hub_Connector
-                        image: golang:1.25.12
+                        image: golang:1.26
                         shell: Sh
                         command: |-
                           # force go modules
@@ -375,7 +376,7 @@ pipeline:
                       identifier: Run_1
                       spec:
                         connectorRef: Plugins_Docker_Hub_Connector
-                        image: golang:1.25.12
+                        image: golang:1.26
                         shell: Sh
                         command: |-
                           # force go modules
@@ -467,7 +468,7 @@ pipeline:
                       name: Build Binary
                       spec:
                         connectorRef: Plugins_Docker_Hub_Connector
-                        image: golang:1.25.12
+                        image: golang:1.26
                         shell: Sh
                         command: |-
                           # force go modules
@@ -916,7 +917,7 @@ pipeline:
                   identifier: Run_1
                   spec:
                     connectorRef: Plugins_Docker_Hub_Connector
-                    image: golang:1.25.12
+                    image: golang:1.26
                     shell: Sh
                     command: |-
                       GOOS=linux   GOARCH=amd64   go build -ldflags "-s -w -X main.version=${DRONE_TAG##v}" -a -tags netgo  -o release/plugin-linux-amd64

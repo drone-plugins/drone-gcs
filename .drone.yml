@@ -9,17 +9,18 @@ pool:
 
 steps:
   - name: lint
-    image: golang:1.25.7
+    image: golang:1.26
     pull: always
     commands:
-      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.10.1
+      - export PATH="$(go env GOPATH)/bin:$PATH"
       - golangci-lint version
       - golangci-lint run
     volumes:
       - name: gopath
         path: "/go"
   - name: test
-    image: golang:1.25.7
+    image: golang:1.26
     pull: always
     commands:
       - go test -cover ./...
@@ -47,7 +48,7 @@ pool:
 
 steps:
   - name: environment
-    image: golang:1.25.7
+    image: golang:1.26
     pull: always
     environment:
       CGO_ENABLED: "0"
@@ -55,7 +56,7 @@ steps:
       - go version
       - go env
   - name: build
-    image: golang:1.25.7
+    image: golang:1.26
     environment:
       CGO_ENABLED: "0"
     commands:
@@ -91,7 +92,7 @@ pool:
 
 steps:
   - name: environment
-    image: golang:1.25.7
+    image: golang:1.26
     pull: always
     environment:
       CGO_ENABLED: "0"
@@ -99,7 +100,7 @@ steps:
       - go version
       - go env
   - name: build
-    image: golang:1.25.7
+    image: golang:1.26
     environment:
       CGO_ENABLED: "0"
     commands:
@@ -264,7 +265,7 @@ pool:
 
 steps:
   - name: build
-    image: golang:1.25.7
+    image: golang:1.26
     commands:
       - GOOS=linux   GOARCH=amd64   go build -ldflags "-s -w -X main.version=${DRONE_TAG##v}" -a -tags netgo  -o release/plugin-linux-amd64
       - GOOS=linux   GOARCH=arm64   go build -ldflags "-s -w -X main.version=${DRONE_TAG##v}" -a -tags netgo  -o release/plugin-linux-arm64

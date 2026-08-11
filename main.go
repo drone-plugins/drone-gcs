@@ -145,12 +145,12 @@ func run(c *cli.Context) error {
 
 	if !plugin.Config.Download {
 		if plugin.Config.Target == "" {
-			return fmt.Errorf("Missing target")
+			return fmt.Errorf("missing target")
 		}
 	}
 
 	if plugin.Config.Source == "" {
-		return fmt.Errorf("Missing source")
+		return fmt.Errorf("missing source")
 	}
 
 	var client *storage.Client
@@ -166,18 +166,7 @@ func run(c *cli.Context) error {
 			return err
 		}
 	} else if c.String("json-key") != "" {
-		err := os.MkdirAll(os.TempDir(), 0600)
-		if err != nil {
-			return fmt.Errorf("failed to create temporary directory: %w", err)
-		}
-
-		tmpfile, err := os.CreateTemp("", "")
-		if err != nil {
-			return fmt.Errorf("failed to create temporary file: %w", err)
-		}
-		defer os.Remove(tmpfile.Name()) // clean up
-
-		client, err = gcsClientWithJSONKey(c.String("json-key"), tmpfile)
+		client, err = gcsClientWithJSONKey(c.String("json-key"))
 		if err != nil {
 			return err
 		}
@@ -205,16 +194,14 @@ func gcsClientWithToken(token string) (*storage.Client, error) {
 	return client, nil
 }
 
-func gcsClientWithJSONKey(jsonKey string, credFile *os.File) (*storage.Client, error) {
-	if _, err := credFile.Write([]byte(jsonKey)); err != nil {
-		return nil, fmt.Errorf("failed to write gcs credentials to file: %w", err)
-	}
-	if err := credFile.Close(); err != nil {
-		return nil, fmt.Errorf("failed to close gcs credentials file: %w", err)
+func gcsClientWithJSONKey(jsonKey string) (*storage.Client, error) {
+	auth, err := google.JWTConfigFromJSON([]byte(jsonKey), storage.ScopeFullControl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to authenticate json key: %w", err)
 	}
 
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFile.Name()))
+	client, err := storage.NewClient(ctx, option.WithTokenSource(auth.TokenSource(ctx)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}

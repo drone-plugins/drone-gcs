@@ -51,7 +51,7 @@ func gunzip(t *testing.T, bz []byte) []byte {
 		t.Errorf("gunzip NewReader: %v", err)
 		return bz
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	b, err := io.ReadAll(r)
 	if err != nil {
 		t.Errorf("gunzip read: %v", err)
@@ -141,6 +141,18 @@ func TestUploadFile(t *testing.T) {
 	}
 }
 
+// uploadObjectMeta decodes GCS upload metadata without CRC32C, which newer
+// storage clients serialize as a base64 string incompatible with uint32.
+type uploadObjectMeta struct {
+	Name            string            `json:"name"`
+	Bucket          string            `json:"bucket"`
+	ContentType     string            `json:"contentType"`
+	ContentEncoding string            `json:"contentEncoding"`
+	CacheControl    string            `json:"cacheControl"`
+	Metadata        map[string]string `json:"metadata"`
+	ACL             []storage.ACLRule `json:"acl"`
+}
+
 func TestRun(t *testing.T) {
 	wdir, err := os.MkdirTemp("", "drone-gcs-test")
 	if err != nil {
@@ -201,37 +213,37 @@ func TestRun(t *testing.T) {
 			t.Errorf("meta NextPart: %v", err)
 			return
 		}
-		var attrs storage.ObjectAttrs
-		if err := json.NewDecoder(p).Decode(&attrs); err != nil {
+		var meta uploadObjectMeta
+		if err := json.NewDecoder(p).Decode(&meta); err != nil {
 			t.Errorf("meta json: %v", err)
 			return
 		}
 		seenMu.Lock()
-		seen[attrs.Name] = struct{}{}
+		seen[meta.Name] = struct{}{}
 		seenMu.Unlock()
-		obj := files[attrs.Name]
+		obj := files[meta.Name]
 		if obj == nil {
-			t.Errorf("unexpected obj: %+v", attrs)
+			t.Errorf("unexpected obj: %+v", meta)
 			return
 		}
 
-		if attrs.Bucket != "bucket" {
-			t.Errorf("attrs.Bucket = %q; want bucket", attrs.Bucket)
+		if meta.Bucket != "bucket" {
+			t.Errorf("meta.Bucket = %q; want bucket", meta.Bucket)
 		}
-		if attrs.CacheControl != plugin.Config.CacheControl {
-			t.Errorf("attrs.CacheControl = %q; want %q", attrs.CacheControl, plugin.Config.CacheControl)
+		if meta.CacheControl != plugin.Config.CacheControl {
+			t.Errorf("meta.CacheControl = %q; want %q", meta.CacheControl, plugin.Config.CacheControl)
 		}
-		if obj.gzip && attrs.ContentEncoding != "gzip" {
-			t.Errorf("attrs.ContentEncoding = %q; want gzip", attrs.ContentEncoding)
+		if obj.gzip && meta.ContentEncoding != "gzip" {
+			t.Errorf("meta.ContentEncoding = %q; want gzip", meta.ContentEncoding)
 		}
-		if !strings.HasPrefix(attrs.ContentType, obj.ctype) {
-			t.Errorf("attrs.ContentType = %q; want %q", attrs.ContentType, obj.ctype)
+		if !strings.HasPrefix(meta.ContentType, obj.ctype) {
+			t.Errorf("meta.ContentType = %q; want %q", meta.ContentType, obj.ctype)
 		}
-		if !reflect.DeepEqual(attrs.ACL, acls) {
-			t.Errorf("attrs.ACL = %v; want %v", attrs.ACL, acls)
+		if !reflect.DeepEqual(meta.ACL, acls) {
+			t.Errorf("meta.ACL = %v; want %v", meta.ACL, acls)
 		}
-		if !reflect.DeepEqual(attrs.Metadata, plugin.Config.Metadata) {
-			t.Errorf("attrs.Metadata = %+v; want %+v", attrs.Metadata, plugin.Config.Metadata)
+		if !reflect.DeepEqual(meta.Metadata, plugin.Config.Metadata) {
+			t.Errorf("meta.Metadata = %+v; want %+v", meta.Metadata, plugin.Config.Metadata)
 		}
 
 		// media
@@ -241,7 +253,7 @@ func TestRun(t *testing.T) {
 			return
 		}
 		b, _ := io.ReadAll(p)
-		if attrs.ContentEncoding == "gzip" {
+		if meta.ContentEncoding == "gzip" {
 			b = gunzip(t, b)
 		}
 		if !bytes.Equal(b, obj.body) {
@@ -341,7 +353,7 @@ func TestExpandGlobPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test structure
 	testDir := filepath.Join(tmpDir, "test")
@@ -425,7 +437,7 @@ func TestWalkGlobFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test structure
 	dir1 := filepath.Join(tmpDir, "dir1")
@@ -458,7 +470,7 @@ func TestTargetPathFix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.zip")
@@ -614,7 +626,7 @@ func TestRootLevelGlobPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp directory to simulate real scenario
 	oldDir, err := os.Getwd()
@@ -681,7 +693,7 @@ func TestProductionScenarioReproduction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp directory
 	oldDir, err := os.Getwd()
@@ -754,7 +766,7 @@ func TestEndToEndRootLevelGlob(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp directory (simulate /harness)
 	oldDir, err := os.Getwd()
@@ -838,7 +850,7 @@ func TestHarnessProductionScenario(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Change to temp directory to simulate /harness working directory
 	oldDir, err := os.Getwd()
@@ -911,7 +923,7 @@ func TestGlobPatternsWithIgnore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test subdirectory
 	testDir := filepath.Join(tmpDir, "test")
@@ -1046,7 +1058,7 @@ func TestAllProductionScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create subdirectory for testing
 	testDir := filepath.Join(tmpDir, "test")
@@ -1172,7 +1184,7 @@ func TestRunEmptyTargetSingleFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(wdir)
+	defer func() { _ = os.RemoveAll(wdir) }()
 
 	writeFile(t, wdir, "artifact.txt", []byte("content"))
 
@@ -1226,7 +1238,7 @@ func TestBackwardCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test structure similar to original tests
 	uploadDir := filepath.Join(tmpDir, "upload")
