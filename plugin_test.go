@@ -17,6 +17,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -130,7 +131,7 @@ func TestUploadFile(t *testing.T) {
 		client, _ := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
 		plugin.bucket = client.Bucket("bucket")
 
-		err := plugin.uploadFile("file", filepath.Join(wdir, "file"))
+		_, err := plugin.uploadFile("file", filepath.Join(wdir, "file"))
 
 		switch {
 		case test.expectOk && err != nil:
@@ -1216,6 +1217,237 @@ func TestRunEmptyTargetSingleFile(t *testing.T) {
 
 	if uploadedName != "artifact.txt" {
 		t.Errorf("uploaded object name = %q, want %q", uploadedName, "artifact.txt")
+	}
+}
+
+// TestUploadFileDigestMatchesGzippedBytes verifies that the digest returned
+// by uploadFile is computed over the bytes actually sent to GCS (i.e. the
+// gzip-compressed stream when the file extension matches Config.Gzip), not
+// the pre-compression local file. Otherwise the reported artifact digest
+// would never match the object GCS actually stores.
+func TestUploadFileDigestMatchesGzippedBytes(t *testing.T) {
+	wdir, err := os.MkdirTemp("", "drone-gcs-gzip-digest-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(wdir)
+
+	content := []byte("some javascript content that will be gzip-compressed")
+	writeFile(t, wdir, "file.js", content)
+
+	var uploadedBody []byte
+	rt := &fakeTransport{func(r *http.Request) (*http.Response, error) {
+		_, mp, err := mime.ParseMediaType(r.Header.Get("content-type"))
+		if err != nil {
+			t.Fatalf("ParseMediaType: %v", err)
+		}
+		mr := multipart.NewReader(r.Body, mp["boundary"])
+		_, _ = mr.NextPart() // skip metadata part
+		p, err := mr.NextPart()
+		if err != nil {
+			t.Fatalf("NextPart: %v", err)
+		}
+		uploadedBody, err = io.ReadAll(p)
+		if err != nil {
+			t.Fatalf("reading uploaded body: %v", err)
+		}
+		return &http.Response{
+			Body:       io.NopCloser(strings.NewReader(`{"name": "fake"}`)),
+			Proto:      "HTTP/1.0",
+			ProtoMajor: 1,
+			ProtoMinor: 0,
+			StatusCode: http.StatusOK,
+		}, nil
+	}}
+	hc := &http.Client{Transport: rt}
+	client, err := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := &Plugin{Config: Config{Gzip: []string{"js"}}}
+	p.bucket = client.Bucket("bucket")
+
+	digest, err := p.uploadFile("file.js", filepath.Join(wdir, "file.js"))
+	if err != nil {
+		t.Fatalf("uploadFile: %v", err)
+	}
+
+	// Sanity check: the file was actually compressed on the wire.
+	if len(uploadedBody) == 0 {
+		t.Fatal("no body captured from upload request")
+	}
+	if bytes.Equal(uploadedBody, content) {
+		t.Fatal("expected uploaded body to be gzip-compressed, got raw content")
+	}
+
+	h := sha256.New()
+	h.Write(uploadedBody)
+	wantDigest := fmt.Sprintf("sha256:%x", h.Sum(nil))
+
+	if digest != wantDigest {
+		t.Errorf("digest = %q; want %q (sha256 of the uploaded, compressed bytes)", digest, wantDigest)
+	}
+
+	// The digest must NOT equal the hash of the original, uncompressed file -
+	// that would mean we regressed back to hashing pre-compression content.
+	h2 := sha256.New()
+	h2.Write(content)
+	rawDigest := fmt.Sprintf("sha256:%x", h2.Sum(nil))
+	if digest == rawDigest {
+		t.Errorf("digest = %q matches the pre-compression file hash; want the hash of the compressed upload", digest)
+	}
+}
+
+// TestWriteArtifactFile verifies the fileUpload/v1 JSON is written correctly.
+func TestWriteArtifactFile(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "artifact-*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+	defer os.Remove(tmpFile.Name())
+
+	t.Setenv("PLUGIN_ARTIFACT_FILE", tmpFile.Name())
+
+	entries := []fileArtifactEntry{
+		{
+			Name:       "app.jar",
+			URL:        "https://storage.googleapis.com/my-bucket/builds/app.jar",
+			FilePath:   "builds/app.jar",
+			BucketName: "my-bucket",
+			Digest:     "sha256:abc123",
+		},
+	}
+	writeArtifactFile(entries)
+
+	data, err := os.ReadFile(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("reading artifact file: %v", err)
+	}
+
+	var af artifactFile
+	if err := json.Unmarshal(data, &af); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if af.Kind != "fileUpload/v1" {
+		t.Errorf("kind = %q; want fileUpload/v1", af.Kind)
+	}
+	if len(af.Data.FileArtifacts) != 1 {
+		t.Fatalf("fileArtifacts len = %d; want 1", len(af.Data.FileArtifacts))
+	}
+	got := af.Data.FileArtifacts[0]
+	if got.Name != "app.jar" {
+		t.Errorf("name = %q; want app.jar", got.Name)
+	}
+	if got.URL != "https://storage.googleapis.com/my-bucket/builds/app.jar" {
+		t.Errorf("url = %q", got.URL)
+	}
+	if got.BucketName != "my-bucket" {
+		t.Errorf("bucketName = %q; want my-bucket", got.BucketName)
+	}
+	if got.Digest != "sha256:abc123" {
+		t.Errorf("digest = %q; want sha256:abc123", got.Digest)
+	}
+}
+
+// TestWriteArtifactFileNoEnv verifies that writeArtifactFile is a no-op when
+// PLUGIN_ARTIFACT_FILE is not set.
+func TestWriteArtifactFileNoEnv(t *testing.T) {
+	t.Setenv("PLUGIN_ARTIFACT_FILE", "")
+	// Should not panic or error.
+	writeArtifactFile([]fileArtifactEntry{{Name: "test"}})
+}
+
+// TestExecWritesArtifactFile verifies that Exec writes PLUGIN_ARTIFACT_FILE
+// containing one entry per uploaded file with correct fields.
+func TestExecWritesArtifactFile(t *testing.T) {
+	wdir, err := os.MkdirTemp("", "drone-gcs-artifact-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(wdir)
+
+	content := []byte("artifact content")
+	writeFile(t, wdir, "artifact.txt", content)
+
+	// Compute expected digest.
+	h := sha256.New()
+	h.Write(content)
+	wantDigest := fmt.Sprintf("sha256:%x", h.Sum(nil))
+
+	// Artifact file destination.
+	pluginArtifactFile, err := os.CreateTemp("", "plugin-artifact-*.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pluginArtifactFile.Close()
+	defer os.Remove(pluginArtifactFile.Name())
+	t.Setenv("PLUGIN_ARTIFACT_FILE", pluginArtifactFile.Name())
+
+	rt := &fakeTransport{func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			Body:       io.NopCloser(strings.NewReader(`{"name": "path/artifact.txt"}`)),
+			Proto:      "HTTP/1.0",
+			ProtoMajor: 1,
+			ProtoMinor: 0,
+			StatusCode: http.StatusOK,
+		}, nil
+	}}
+
+	hc := &http.Client{Transport: rt}
+	client, err := storage.NewClient(context.Background(), option.WithHTTPClient(hc))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Use a directory-style target (trailing slash) so the file's own name is
+	// preserved as the GCS object key suffix and thus as the artifact Name.
+	p := &Plugin{
+		Config: Config{
+			Source: filepath.Join(wdir, "artifact.txt"),
+			Target: "my-bucket/uploads/",
+		},
+		printf: t.Logf,
+		fatalf: t.Fatalf,
+	}
+
+	if err := p.Exec(client); err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+
+	data, err := os.ReadFile(pluginArtifactFile.Name())
+	if err != nil {
+		t.Fatalf("reading artifact file: %v", err)
+	}
+
+	var result artifactFile
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if result.Kind != "fileUpload/v1" {
+		t.Errorf("kind = %q; want fileUpload/v1", result.Kind)
+	}
+	if len(result.Data.FileArtifacts) != 1 {
+		t.Fatalf("fileArtifacts len = %d; want 1", len(result.Data.FileArtifacts))
+	}
+	entry := result.Data.FileArtifacts[0]
+	if entry.Name != "artifact.txt" {
+		t.Errorf("name = %q; want artifact.txt", entry.Name)
+	}
+	if entry.URL != "https://storage.googleapis.com/my-bucket/uploads/artifact.txt" {
+		t.Errorf("url = %q; want https://storage.googleapis.com/my-bucket/uploads/artifact.txt", entry.URL)
+	}
+	if entry.FilePath != "uploads/artifact.txt" {
+		t.Errorf("filePath = %q; want uploads/artifact.txt", entry.FilePath)
+	}
+	if entry.BucketName != "my-bucket" {
+		t.Errorf("bucketName = %q; want my-bucket", entry.BucketName)
+	}
+	if entry.Digest != wantDigest {
+		t.Errorf("digest = %q; want %q", entry.Digest, wantDigest)
 	}
 }
 
