@@ -214,7 +214,7 @@ func gcsClientWithJSONKey(jsonKey string, credFile *os.File) (*storage.Client, e
 	}
 
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFile.Name()))
+	client, err := storage.NewClient(ctx, option.WithCredentialsFile(credFile.Name())) //nolint: staticcheck
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize storage: %w", err)
 	}
