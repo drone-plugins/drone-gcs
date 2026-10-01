@@ -4,10 +4,17 @@
 # drone-gcs for Windows Server 2025 (LTSC 2025)
 # ---------------------------------------------------------------------------
 
+FROM mcr.microsoft.com/windows/servercore:ltsc2025 as roots
+COPY docker/windows/ C:/roots-src/
+RUN powershell -NoProfile -ExecutionPolicy Bypass -File C:\roots-src\export-roots.ps1
+
 FROM plugins/base:windows-ltsc2025-amd64
 USER ContainerAdministrator
+SHELL ["cmd", "/S", "/C"]
 
 ENV GODEBUG=netdns=go
+COPY --from=roots /roots/ /roots/
+RUN for %f in (C:\roots\*.reg) do @(reg import "%f" || exit 1)
 
 LABEL maintainer="Drone.IO Community <drone-dev@googlegroups.com>" `
   org.label-schema.name="Drone GCS" `
