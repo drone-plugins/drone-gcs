@@ -20,7 +20,7 @@ pipeline:
         spec:
           cloneCodebase: true
           caching:
-            enabled: false
+            enabled: true
             paths: []
           platform:
             os: Linux
@@ -51,6 +51,8 @@ pipeline:
                     image: golang:1.26.8
                     shell: Sh
                     command: go test -cover ./...
+          buildIntelligence:
+            enabled: true
     - parallel:
         - stage:
             name: linux-amd64
@@ -60,7 +62,7 @@ pipeline:
             spec:
               cloneCodebase: true
               caching:
-                enabled: false
+                enabled: true
                 paths: []
               platform:
                 os: Linux
@@ -126,6 +128,8 @@ pipeline:
                         stageStatus: Success
                         condition: |
                           <+codebase.build.type> == "branch"
+              buildIntelligence:
+                enabled: true
         - stage:
             identifier: linarm64
             type: CI
@@ -134,7 +138,7 @@ pipeline:
             spec:
               cloneCodebase: true
               caching:
-                enabled: false
+                enabled: true
                 paths: []
               platform:
                 os: Linux
@@ -197,6 +201,8 @@ pipeline:
                       when:
                         stageStatus: Success
                         condition: <+codebase.build.type> == "branch"
+              buildIntelligence:
+                enabled: true
         - stage:
             identifier: winamd64
             type: CI
