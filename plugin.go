@@ -95,7 +95,11 @@ type (
 		gcpProjectId        string
 		serviceAccountEmail string
 		OidcIdToken         string
-		EnableProxy         bool
+
+		// Workload identity delivered by the platform; the token is minted through the broker at run time.
+		WorkloadIdentityHandle string
+		WorkloadIdentityName   string
+		EnableProxy            bool
 	}
 
 	Plugin struct {

@@ -116,20 +116,22 @@ func main() {
 func run(c *cli.Context) error {
 	plugin := Plugin{
 		Config: Config{
-			Token:               c.String("token"),
-			ACL:                 c.StringSlice("acl"),
-			Source:              c.String("source"),
-			Target:              c.String("target"),
-			Download:            c.Bool("download"),
-			Ignore:              c.String("ignore"),
-			Gzip:                c.StringSlice("gzip"),
-			CacheControl:        c.String("cache-control"),
-			workloadPoolId:      c.String("oidc-poo-id"),
-			providerId:          c.String("oidc-provider-id"),
-			gcpProjectId:        c.String("oidc-project-number"),
-			serviceAccountEmail: c.String("oidc-service-account-email"),
-			OidcIdToken:         c.String("oidc-token-id"),
-			EnableProxy:         c.Bool("enable-proxy"),
+			Token:                  c.String("token"),
+			ACL:                    c.StringSlice("acl"),
+			Source:                 c.String("source"),
+			Target:                 c.String("target"),
+			Download:               c.Bool("download"),
+			Ignore:                 c.String("ignore"),
+			Gzip:                   c.StringSlice("gzip"),
+			CacheControl:           c.String("cache-control"),
+			workloadPoolId:         c.String("oidc-poo-id"),
+			providerId:             c.String("oidc-provider-id"),
+			gcpProjectId:           c.String("oidc-project-number"),
+			serviceAccountEmail:    c.String("oidc-service-account-email"),
+			OidcIdToken:            c.String("oidc-token-id"),
+			WorkloadIdentityHandle: os.Getenv("HARNESS_WI_HANDLE"),
+			WorkloadIdentityName:   os.Getenv("HARNESS_WI_IDENTITY_NAME"),
+			EnableProxy:            c.Bool("enable-proxy"),
 		},
 	}
 
@@ -151,6 +153,10 @@ func run(c *cli.Context) error {
 
 	if plugin.Config.Source == "" {
 		return fmt.Errorf("Missing source")
+	}
+
+	if err := plugin.Config.resolveWorkloadIdentityToken(context.Background()); err != nil {
+		return err
 	}
 
 	var client *storage.Client
